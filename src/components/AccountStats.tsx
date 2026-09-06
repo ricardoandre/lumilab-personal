@@ -1,9 +1,10 @@
 'use client';
 
 import { Row, Col, Card, Statistic, Typography, Grid } from 'antd';
-import type { Overview, StockRow } from '@/lib/gotrade/report';
+import type { Overview, StockRow, YearVsBench } from '@/lib/gotrade/report';
 import { StatCard, BreakdownLine, BreakdownNote, BreakdownStack } from './StatCard';
 import { usd, usd0, Pct, Money } from './money';
+import { StockLabel } from './StockIcon';
 
 const GREEN = '#237804';
 const RED = '#a8071a';
@@ -26,8 +27,16 @@ const monthName = (period: string | null) => {
  * fully counted in the denominator of the first while having had no time to grow.
  */
 export function AccountStats({
-  overview, stocks, clickable = true,
-}: { overview: Overview; stocks: StockRow[]; clickable?: boolean }) {
+  overview, stocks, years, irr, clickable = true,
+}: {
+  overview: Overview; stocks: StockRow[];
+  years?: YearVsBench[]; irr?: number | null;
+  clickable?: boolean;
+}) {
+  // Breakdown lists are ordered by RETURN, best first — the ranking is the point
+  // of opening them, and alphabetical order says nothing.
+  const byReturn = [...stocks].sort((a, b) => (b.returnPct ?? -Infinity) - (a.returnPct ?? -Infinity));
+  const byMoney = [...stocks].sort((a, b) => b.totalReturn - a.totalReturn);
   const screens = Grid.useBreakpoint();
   const small = !screens.lg;
   const pct = (v: number | null) => (v === null ? '—' : `${v >= 0 ? '+' : ''}${(v * 100).toFixed(2)}%`);
@@ -63,8 +72,10 @@ export function AccountStats({
               drawerTitle="What makes up the value"
               breakdown={
                 <BreakdownStack>
-                  {stocks.map((s) => (
-                    <BreakdownLine key={s.symbol} label={s.symbol} note={s.name ?? undefined} value={<Money v={s.marketValue} />} />
+                  {[...stocks].sort((a, b) => b.marketValue - a.marketValue).map((s) => (
+                    <BreakdownLine key={s.symbol}
+                      label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
+                      value={<Money v={s.marketValue} />} />
                   ))}
                   <BreakdownLine label="Cash" note="uninvested" value={<Money v={overview.cash} />} divider />
                   <BreakdownLine label="Total" value={<Money v={overview.latestValue} />} strong divider />
@@ -89,9 +100,10 @@ export function AccountStats({
                   <BreakdownLine label="Dividends received" value={<Money v={overview.dividends} />} />
                   <BreakdownLine label="Withholding tax" note="15% US tax on dividends" value={<Money v={overview.tax} />} />
                   <BreakdownLine label="Total earned" value={<Money v={overview.gain} />} strong divider />
-                  <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>By stock</div>
-                  {stocks.map((s) => (
-                    <BreakdownLine key={s.symbol} label={s.symbol}
+                  <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>By stock — most earned first</div>
+                  {byMoney.map((s) => (
+                    <BreakdownLine key={s.symbol}
+                      label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
                       note={s.dividends ? `${usd(s.unrealized)} price + ${usd(s.dividends)} dividends` : 'price growth'}
                       value={<Money v={s.totalReturn} />} />
                   ))}
@@ -111,9 +123,11 @@ export function AccountStats({
                   <BreakdownLine label="Worth today" value={<Money v={overview.latestValue} />} />
                   <BreakdownLine label="Earned" value={<Money v={overview.gain} />} strong divider />
                   <BreakdownLine label="Total return" value={<Pct v={overview.simpleReturn} bold />} strong />
-                  <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>By stock</div>
-                  {stocks.map((s) => (
-                    <BreakdownLine key={s.symbol} label={s.symbol} note={s.name ?? undefined} value={<Pct v={s.returnPct} />} />
+                  <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>By stock — best first</div>
+                  {byReturn.map((s) => (
+                    <BreakdownLine key={s.symbol}
+                      label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
+                      value={<Pct v={s.returnPct} />} />
                   ))}
                   <BreakdownNote>
                     This is what your money grew by — the same measure Gotrade&apos;s own app shows.
@@ -134,11 +148,28 @@ export function AccountStats({
                 <BreakdownStack>
                   <BreakdownLine label="You" value={<Pct v={overview.annualised} bold />} />
                   <BreakdownLine label="SPY, same months" value={<Pct v={overview.benchAnnualised} />} />
-                  <BreakdownLine label="Performance over the whole period" value={<Pct v={overview.sinceInception} />} divider />
+                  {irr !== undefined && irr !== null && (
+                    <BreakdownLine label="Your own money's rate (IRR)" note="what your actual deposits earned"
+                      value={<Pct v={irr} />} />
+                  )}
+                  <BreakdownLine label="Whole period" value={<Pct v={overview.sinceInception} />} divider />
+
+                  {years && years.length > 0 && (
+                    <>
+                      <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>Year by year</div>
+                      {[...years].reverse().map((y) => (
+                        <BreakdownLine key={y.year} label={y.year}
+                          note={`SPY ${y.benchmarkPct === null ? '—' : `${(y.benchmarkPct * 100).toFixed(2)}%`}`}
+                          value={<Pct v={y.returnPct} />} />
+                      ))}
+                    </>
+                  )}
+
                   <BreakdownNote>
                     Time-weighted: each month&apos;s performance chained together, so paying money in
-                    is never counted as a gain. This is how a fund&apos;s return is quoted, and it is
-                    the fair way to compare against SPY.
+                    is never counted as a gain. This is how a fund&apos;s return is quoted, and the
+                    fair way to compare against SPY. IRR is different again — the rate your own
+                    deposits earned, given exactly when you made them.
                   </BreakdownNote>
                 </BreakdownStack>
               } />

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Card, Space, Segmented, Tag, Grid, Typography } from 'antd';
 import { ResponsiveRows } from './ResponsiveRows';
 import { Money } from './money';
+import { StockIcon } from './StockIcon';
 
 export interface TxRow {
   key: string; date: string; type: string; symbol: string | null;
@@ -37,7 +38,12 @@ export function TransactionsReport({ rows }: { rows: TxRow[] }) {
           fields={[
             { key: 'date', label: 'Date', primary: true, render: (r) => r.date },
             { key: 'type', label: 'Type', primary: true, render: (r) => <Tag color={COLOR[r.type] ?? 'default'} style={{ marginInlineEnd: 0 }}>{r.type.toLowerCase()}</Tag> },
-            { key: 'sym', label: 'Symbol', render: (r) => r.symbol ?? '—' },
+            {
+              key: 'sym', label: 'Symbol',
+              render: (r) => (r.symbol
+                ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><StockIcon symbol={r.symbol} size={18} />{r.symbol}</span>
+                : '—'),
+            },
             { key: 'amt', label: 'Amount', render: (r) => <Money v={r.amount} /> },
             { key: 'qty', label: 'Shares', render: (r) => (r.quantity === null ? '—' : r.quantity) },
             { key: 'price', label: 'Price', render: (r) => (r.price === null ? '—' : <Money v={r.price} />) },

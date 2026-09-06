@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/require-user';
 import {
   monthlySeries, benchmarkMonthly, yearlyVsBenchmark, overviewFrom, stockReport,
-  missingMonths, failedImports,
+  missingMonths, failedImports, stockYearReport, accountIrr,
 } from '@/lib/gotrade/report';
 import { AccountDashboard } from '@/components/AccountDashboard';
 import { loadAccount } from '@/lib/account-page';
@@ -47,6 +47,14 @@ export default async function AccountDashboardPage({ params }: { params: Promise
       })()
     : null;
 
+  const overview = overviewFrom(months, bench);
+  const [yearStocks, irr] = await Promise.all([
+    latestYear ? stockYearReport(prisma, accountId, latestYear.year) : Promise.resolve([]),
+    overview
+      ? accountIrr(prisma, accountId, overview.latestValue, new Date(months[months.length - 1].periodEnd))
+      : Promise.resolve(null),
+  ]);
+
   return (
     <AccountDashboard
       accountId={id}
@@ -54,11 +62,14 @@ export default async function AccountDashboardPage({ params }: { params: Promise
       provider={account.provider.label}
       currency={account.currency}
       accountNo={account.externalAccountNo}
-      overview={overviewFrom(months, bench)}
+      overview={overview}
       stocks={stocks}
       months={months}
       thisYear={latestYear}
       thisYearMonths={thisYearMonths.length >= 2 ? thisYearMonths : months.slice(-12)}
+      yearStocks={yearStocks}
+      irr={irr}
+      years={years}
       asAt={asAt}
       missing={missing}
       failed={failed}

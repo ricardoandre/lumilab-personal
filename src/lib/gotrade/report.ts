@@ -465,3 +465,148 @@ export async function failedImports(db: Db, accountId: bigint): Promise<{ fileNa
   });
   return rows.map((r: any) => ({ fileName: r.fileName, reason: r.reconcileNote ?? 'did not balance' }));
 }
+
+// ─────────────────────────── IRR, projections, per-year ───────────────────────
+
+export interface CashFlow { date: Date; amount: number }
+
+/**
+ * Money-weighted return (XIRR): the annual rate YOUR OWN deposits actually
+ * earned, given exactly when each one was made.
+ *
+ * It sits between the two returns already shown, and is arguably the most
+ * personal of the three:
+ *   - Total return       ignores timing entirely
+ *   - Time-weighted      ignores YOUR timing on purpose, to judge the investments
+ *   - IRR                is the rate that makes your actual payments add up to
+ *                        today's value — the number a bank would quote you
+ *
+ * Solved by bisection rather than Newton: cash-flow polynomials can have flat
+ * or multiple roots, and a derivative method wanders off them. Bisection over a
+ * bracketed range cannot, and a hundred iterations is instant at this size.
+ */
+export function xirr(flows: CashFlow[], guessRange: [number, number] = [-0.95, 10]): number | null {
+  if (flows.length < 2) return null;
+  const sorted = [...flows].sort((a, b) => a.date.getTime() - b.date.getTime());
+  const t0 = sorted[0].date.getTime();
+  const years = (d: Date) => (d.getTime() - t0) / (365.25 * 24 * 3600 * 1000);
+
+  const npv = (rate: number) =>
+    sorted.reduce((acc, f) => acc + f.amount / Math.pow(1 + rate, years(f.date)), 0);
+
+  // A sign change is required, i.e. money must have gone both in and out.
+  let [lo, hi] = guessRange;
+  let flo = npv(lo);
+  let fhi = npv(hi);
+  if (!Number.isFinite(flo) || !Number.isFinite(fhi) || flo * fhi > 0) return null;
+
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2;
+    const f = npv(mid);
+    if (Math.abs(f) < 1e-7) return r4(mid);
+    if (flo * f < 0) { hi = mid; fhi = f; } else { lo = mid; flo = f; }
+  }
+  return r4((lo + hi) / 2);
+}
+
+/** Deposits out of pocket (negative), plus today's value as the closing inflow. */
+export async function accountIrr(db: Db, accountId: bigint, latestValue: number, asOf: Date): Promise<number | null> {
+  const flows = await db.transaction.findMany({
+    where: { accountId, type: { in: ['DEPOSIT', 'WITHDRAWAL', 'JOURNAL'] } },
+    orderBy: { tradeDate: 'asc' },
+    select: { tradeDate: true, netAmount: true },
+  });
+  if (!flows.length) return null;
+  const cf: CashFlow[] = flows.map((f: any) => ({ date: f.tradeDate as Date, amount: -num(f.netAmount) }));
+  cf.push({ date: asOf, amount: latestValue });
+  return xirr(cf);
+}
+
+export interface Projection { years: number; value: number; contributed: number }
+
+/**
+ * What today's balance becomes at the rate achieved so far.
+ *
+ * Two lines, because they answer different questions: what the money already
+ * invested grows to on its own, and what it grows to if the recent pace of
+ * contributions continues. Neither is a forecast — a past rate is not a promise —
+ * and the UI says so.
+ */
+export function project(value: number, annualRate: number | null, annualContribution: number, horizons = [5, 10]): Projection[] {
+  if (annualRate === null) return [];
+  return horizons.map((years) => {
+    const grown = value * Math.pow(1 + annualRate, years);
+    // Contributions treated as arriving once a year and compounding thereafter.
+    let contributed = 0;
+    for (let y = 1; y <= years; y++) contributed += annualContribution * Math.pow(1 + annualRate, years - y);
+    return { years, value: r2(grown), contributed: r2(contributed) };
+  });
+}
+
+/** Average money paid in per year, used as the projection's contribution pace. */
+export function contributionPace(months: MonthRow[]): number {
+  if (months.length < 2) return 0;
+  const total = months.reduce((a, m) => a + m.contributions, 0);
+  return r2(total / (months.length / 12));
+}
+
+export interface StockYearRow extends StockRow {
+  /** Value at the end of the previous year, 0 if not held then. */
+  startValue: number;
+  /** Net bought (positive) or sold (negative) during the year. */
+  netTraded: number;
+  yearDividends: number;
+  yearGain: number;
+  yearReturnPct: number | null;
+}
+
+/**
+ * Per-stock performance WITHIN a year.
+ *
+ * Buying more of a stock is not a gain, so the money put in during the year is
+ * removed from the numerator and added to the base — the same principle as the
+ * portfolio's monthly return, applied per holding.
+ */
+export async function stockYearReport(db: Db, accountId: bigint, year: string): Promise<StockYearRow[]> {
+  const all = await stockReport(db, accountId);
+  const prevEnd = `${Number(year) - 1}-12-31`;
+
+  const startHoldings = await db.statementHolding.findMany({
+    where: { import: { accountId, status: 'ok' }, asOf: new Date(prevEnd) },
+    include: { security: true },
+  });
+  const startBySymbol = new Map<string, number>(
+    startHoldings.map((h: any) => [h.security.symbol, num(h.marketValue)]),
+  );
+
+  const yearStart = new Date(`${year}-01-01`);
+  const trades = await db.transaction.findMany({
+    where: { accountId, tradeDate: { gte: yearStart }, type: { in: ['BUY', 'SELL', 'DIVIDEND', 'TAX'] } },
+    include: { security: true },
+  });
+
+  const traded = new Map<string, number>();
+  const divs = new Map<string, number>();
+  for (const t of trades) {
+    const sym = t.security?.symbol;
+    if (!sym) continue;
+    if (t.type === 'BUY' || t.type === 'SELL') traded.set(sym, (traded.get(sym) ?? 0) - num(t.netAmount));
+    else divs.set(sym, (divs.get(sym) ?? 0) + num(t.netAmount));
+  }
+
+  return all.map((s) => {
+    const startValue = r2(startBySymbol.get(s.symbol) ?? 0);
+    const netTraded = r2(traded.get(s.symbol) ?? 0);
+    const yearDividends = r2(divs.get(s.symbol) ?? 0);
+    const yearGain = r2(s.marketValue - startValue - netTraded + yearDividends);
+    const base = startValue + Math.max(netTraded, 0);
+    return {
+      ...s,
+      startValue,
+      netTraded,
+      yearDividends,
+      yearGain,
+      yearReturnPct: base > 0 ? r4(yearGain / base) : null,
+    };
+  });
+}

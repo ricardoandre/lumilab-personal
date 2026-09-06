@@ -1,46 +1,102 @@
 'use client';
 
-import { Grid } from 'antd';
-import type { YearVsBench } from '@/lib/gotrade/report';
-import { Pct, Money } from './money';
+import { Row, Col, Card, Statistic, Grid } from 'antd';
+import type { YearVsBench, StockYearRow } from '@/lib/gotrade/report';
+import { StatCard, BreakdownLine, BreakdownNote, BreakdownStack } from './StatCard';
+import { StockLabel } from './StockIcon';
+import { usd, usd0, Pct, Money } from './money';
+
+const GREEN = '#237804';
+const RED = '#a8071a';
 
 /**
- * The year at a glance.
+ * The year at a glance, in the same clickable-card layout as the headline
+ * figures above it — one visual language for "a number you can open".
  *
- * "New invested fund" is here because without it the year reads as a triumph:
- * Lisa's 2026 portfolio nearly doubled while the actual return was +4.21% — the
- * rest was money she paid in. Value growth and investment performance are
- * different things, and a year card that shows only the first is misleading.
+ * "New invested fund" earns its place: without it the year reads as a triumph.
+ * Lisa's 2026 portfolio nearly doubled while the real return was +4.21%; the
+ * rest was money she paid in.
  */
-export function YearMetrics({ year, cash }: { year: YearVsBench; cash: number }) {
+export function YearMetrics({
+  year, cash, stocks,
+}: { year: YearVsBench; cash: number; stocks: StockYearRow[] }) {
   const screens = Grid.useBreakpoint();
+  const small = !screens.lg;
   const prev = Number(year.year) - 1;
+  const pct = (v: number | null) => (v === null ? '—' : `${v >= 0 ? '+' : ''}${(v * 100).toFixed(2)}%`);
 
-  const items: { label: string; value: React.ReactNode }[] = [
-    { label: `End ${prev} value`, value: <Money v={year.startValue} /> },
-    { label: 'New invested fund', value: <Money v={year.contributions} zeroDim /> },
-    { label: 'Current portfolio value', value: <Money v={year.endValue} /> },
-    { label: 'Remaining cash', value: <Money v={cash} /> },
-    { label: 'Total return amount', value: <Money v={year.gain} /> },
-    { label: `Return ${year.year}`, value: <Pct v={year.returnPct} bold /> },
-  ];
+  const byYearReturn = [...stocks].sort((a, b) => (b.yearReturnPct ?? -Infinity) - (a.yearReturnPct ?? -Infinity));
+  const byYearMoney = [...stocks].sort((a, b) => b.yearGain - a.yearGain);
+
+  const plain = (title: string, value: string, color?: string) => (
+    <Card size={small ? 'small' : 'default'}>
+      <Statistic title={title} value={value} valueStyle={color ? { color } : undefined} />
+    </Card>
+  );
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: screens.lg ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
-      gap: 12,
-      marginBottom: 12,
-    }}>
-      {items.map((it) => (
-        <div key={it.label}>
-          <div style={{ fontSize: 12, color: '#726c63', lineHeight: 1.3 }}>{it.label}</div>
-          <div style={{ fontSize: 15, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{it.value}</div>
-        </div>
-      ))}
-      <div style={{ gridColumn: '1 / -1', fontSize: 12, color: '#726c63' }}>
-        SPY over the same months: <Pct v={year.benchmarkPct} />
-      </div>
-    </div>
+    <Row gutter={[12, 12]}>
+      <Col xs={12} lg={8}>{plain(`End ${prev} value`, usd(year.startValue))}</Col>
+      <Col xs={12} lg={8}>{plain('New invested fund', usd(year.contributions))}</Col>
+
+      <Col xs={12} lg={8}>
+        <StatCard small={small} title="Current portfolio value" value={usd(year.endValue)}
+          drawerTitle={`What ${year.year} is made of`}
+          breakdown={
+            <BreakdownStack>
+              {[...stocks].sort((a, b) => b.marketValue - a.marketValue).map((s) => (
+                <BreakdownLine key={s.symbol} label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
+                  value={<Money v={s.marketValue} />} />
+              ))}
+              <BreakdownLine label="Cash" value={<Money v={cash} />} divider />
+              <BreakdownLine label="Total" value={<Money v={year.endValue} />} strong divider />
+            </BreakdownStack>
+          } />
+      </Col>
+
+      <Col xs={12} lg={8}>{plain('Remaining cash', usd(cash))}</Col>
+
+      <Col xs={12} lg={8}>
+        <StatCard small={small} title="Total return amount" value={usd0(year.gain)}
+          valueColor={year.gain >= 0 ? GREEN : RED}
+          drawerTitle={`What ${year.year} earned`}
+          breakdown={
+            <BreakdownStack>
+              <BreakdownLine label="Dividends received" value={<Money v={year.income} zeroDim />} />
+              <BreakdownLine label="Everything else is price movement" value={<Money v={year.gain - year.income} />} />
+              <BreakdownLine label={`Earned in ${year.year}`} value={<Money v={year.gain} />} strong divider />
+              <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>By stock — most earned first</div>
+              {byYearMoney.map((s) => (
+                <BreakdownLine key={s.symbol} label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
+                  note={s.startValue === 0 ? 'bought this year' : undefined}
+                  value={<Money v={s.yearGain} />} />
+              ))}
+            </BreakdownStack>
+          } />
+      </Col>
+
+      <Col xs={12} lg={8}>
+        <StatCard small={small} title={`Return ${year.year}`} value={pct(year.returnPct)}
+          valueColor={(year.returnPct ?? 0) >= 0 ? GREEN : RED}
+          drawerTitle={`${year.year} return`}
+          breakdown={
+            <BreakdownStack>
+              <BreakdownLine label="You" value={<Pct v={year.returnPct} bold />} />
+              <BreakdownLine label="SPY, same months" value={<Pct v={year.benchmarkPct} />} />
+              <BreakdownLine label="Difference" value={<Pct v={year.vsBenchmark} />} divider />
+              <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>By stock — best first</div>
+              {byYearReturn.map((s) => (
+                <BreakdownLine key={s.symbol} label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
+                  note={s.netTraded > 0 ? `${usd(s.netTraded)} bought this year` : undefined}
+                  value={<Pct v={s.yearReturnPct} />} />
+              ))}
+              <BreakdownNote>
+                Buying more of a stock is not a gain, so money put in during the year is taken out of
+                the return and added to the base it is measured against.
+              </BreakdownNote>
+            </BreakdownStack>
+          } />
+      </Col>
+    </Row>
   );
 }

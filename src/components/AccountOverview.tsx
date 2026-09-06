@@ -6,6 +6,7 @@ import type { MonthRow, YearVsBench, Overview, StockRow } from '@/lib/gotrade/re
 import { ResponsiveRows } from './ResponsiveRows';
 import { PortfolioChart } from './PortfolioChart';
 import { usd0, Pct, Money } from './money';
+import { StockLabel } from './StockIcon';
 import { AccountStats } from './AccountStats';
 
 const YEARS_SHOWN = 3;
@@ -68,7 +69,7 @@ export function AccountOverview({
         <ResponsiveRows<StockRow & { key: string }>
           rows={stocks.map((s) => ({ ...s, key: s.symbol }))}
           fields={[
-            { key: 'sym', label: 'Symbol', primary: true, render: (r) => <Tag style={{ marginInlineEnd: 0 }}>{r.symbol}</Tag> },
+            { key: 'sym', label: 'Stock', primary: true, render: (r) => <StockLabel symbol={r.symbol} name={r.name} /> },
             { key: 'val', label: 'Portfolio value', render: (r) => <Money v={r.marketValue} /> },
             { key: 'eq', label: 'Money in', render: (r) => <Money v={r.costBasis} /> },
             { key: 'ret', label: 'Return', render: (r) => <Pct v={r.returnPct} bold /> },

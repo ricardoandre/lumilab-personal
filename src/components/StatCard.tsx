@@ -59,7 +59,7 @@ export function StatCard({
 /** Label/value line used inside the breakdown drawers. */
 export function BreakdownLine({
   label, value, note, strong, divider,
-}: { label: string; value: React.ReactNode; note?: string; strong?: boolean; divider?: boolean }) {
+}: { label: React.ReactNode; value: React.ReactNode; note?: string; strong?: boolean; divider?: boolean }) {
   return (
     <div style={{
       display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline',

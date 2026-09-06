@@ -1,14 +1,14 @@
 'use client';
 
-import Link from 'next/link';
-import { Card, Typography, Space, Row, Col, Tag, Alert, Grid, Button } from 'antd';
-import type { MonthRow, Overview, StockRow, YearVsBench } from '@/lib/gotrade/report';
+import { Card, Typography, Space, Tag, Alert, Grid } from 'antd';
+import type { MonthRow, Overview, StockRow, StockYearRow, YearVsBench } from '@/lib/gotrade/report';
 import { ResponsiveRows } from './ResponsiveRows';
 import { StatementUploadButton } from './StatementUploadButton';
 import { PortfolioChart } from './PortfolioChart';
 import { AccountStats } from './AccountStats';
 import { DataHealthAlert } from './DataHealthAlert';
 import { YearMetrics } from './YearMetrics';
+import { StockLabel } from './StockIcon';
 import { usd0, Pct, Money } from './money';
 
 const GREEN = '#237804';
@@ -16,11 +16,12 @@ const RED = '#a8071a';
 
 export function AccountDashboard({
   accountId, accountName, provider, currency, accountNo,
-  overview, stocks, months, thisYear, thisYearMonths, asAt, missing, failed,
+  overview, stocks, months, thisYear, thisYearMonths, yearStocks, irr, years, asAt, missing, failed,
 }: {
   accountId: string; accountName: string; provider: string; currency: string; accountNo: string | null;
   overview: Overview | null; stocks: StockRow[]; months: MonthRow[];
   thisYear: YearVsBench | null; thisYearMonths: MonthRow[];
+  yearStocks: StockYearRow[]; irr: number | null; years: YearVsBench[];
   asAt: { period: string; monthsBehind: number } | null;
   missing: string[]; failed: { fileName: string; reason: string }[];
 }) {
@@ -49,7 +50,7 @@ export function AccountDashboard({
           description="Upload your monthly statements and the reports will build themselves." />
       ) : (
         <>
-          <AccountStats overview={overview} stocks={stocks} />
+          <AccountStats overview={overview} stocks={stocks} years={years} irr={irr} />
 
           <Card size={size}>
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
@@ -70,10 +71,6 @@ export function AccountDashboard({
             </Space>
           </Card>
 
-          <Link href={`/accounts/${accountId}/report`}>
-            <Button block size="large">Full report →</Button>
-          </Link>
-
           {thisYear && (
             <Card
               title={`${thisYear.year} so far`}
@@ -81,16 +78,18 @@ export function AccountDashboard({
               styles={{ body: { padding: 0 } }}
             >
               <div style={{ padding: 12 }}>
-                <YearMetrics year={thisYear} cash={overview.cash} />
-                <PortfolioChart months={thisYearMonths} bare />
+                <YearMetrics year={thisYear} cash={overview.cash} stocks={yearStocks} />
               </div>
-              <ResponsiveRows<StockRow & { key: string }>
-                rows={stocks.map((s) => ({ ...s, key: s.symbol }))}
+              <ResponsiveRows<StockYearRow & { key: string }>
+                rows={[...yearStocks].sort((a, b) => (b.yearReturnPct ?? -Infinity) - (a.yearReturnPct ?? -Infinity))
+                  .map((s) => ({ ...s, key: s.symbol }))}
                 fields={[
-                  { key: 'sym', label: 'Symbol', primary: true, render: (r) => <Tag style={{ marginInlineEnd: 0 }}>{r.symbol}</Tag> },
-                  { key: 'val', label: 'Portfolio value', render: (r) => <Money v={r.marketValue} /> },
-                  { key: 'ret', label: 'Return', render: (r) => <Pct v={r.returnPct} bold /> },
-                  { key: 'ann', label: 'Return a year', render: (r) => <Pct v={r.annualisedPct} /> },
+                  { key: 'sym', label: 'Stock', primary: true, render: (r) => <StockLabel symbol={r.symbol} name={r.name} /> },
+                  { key: 'yret', label: `${thisYear.year} return`, render: (r) => <Pct v={r.yearReturnPct} bold /> },
+                  { key: 'ygain', label: `${thisYear.year} earned`, render: (r) => <Money v={r.yearGain} /> },
+                  { key: 'start', label: `End ${Number(thisYear.year) - 1}`, render: (r) => <Money v={r.startValue} zeroDim /> },
+                  { key: 'bought', label: 'Bought this year', render: (r) => <Money v={r.netTraded} zeroDim /> },
+                  { key: 'val', label: 'Value now', render: (r) => <Money v={r.marketValue} /> },
                 ]}
               />
             </Card>

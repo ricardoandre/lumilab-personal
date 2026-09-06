@@ -5,6 +5,7 @@ import { Card, Typography, Space, Segmented, Tag, Grid } from 'antd';
 import type { StockRow } from '@/lib/gotrade/report';
 import { ResponsiveRows } from './ResponsiveRows';
 import { Pct, Money } from './money';
+import { StockLabel } from './StockIcon';
 
 type SortKey = 'Return a year' | 'Total return' | 'Portfolio value' | 'Money in' | 'Dividends';
 
@@ -43,7 +44,7 @@ export function StocksReport({ stocks }: { stocks: StockRow[] }) {
         <ResponsiveRows<StockRow & { key: string }>
           rows={rows}
           fields={[
-            { key: 'sym', label: 'Symbol', primary: true, render: (r) => <Tag style={{ marginInlineEnd: 0 }}>{r.symbol}</Tag> },
+            { key: 'sym', label: 'Stock', primary: true, render: (r) => <StockLabel symbol={r.symbol} name={r.name} /> },
             { key: 'ret', label: 'Total return', render: (r) => <Pct v={r.returnPct} bold /> },
             { key: 'ann', label: 'Return a year', render: (r) => <Pct v={r.annualisedPct} /> },
             { key: 'val', label: 'Portfolio value', render: (r) => <Money v={r.marketValue} /> },
@@ -52,7 +53,6 @@ export function StocksReport({ stocks }: { stocks: StockRow[] }) {
             { key: 'div', label: 'Dividends', render: (r) => <Money v={r.dividends} zeroDim /> },
             { key: 'qty', label: 'Shares', render: (r) => r.quantity },
             { key: 'held', label: 'Held since', render: (r) => r.heldSince ?? '—' },
-            { key: 'name', label: 'Name', hideOnMobile: true, render: (r) => r.name ?? '—' },
           ]}
         />
       </Card>
