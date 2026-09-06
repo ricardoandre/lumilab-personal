@@ -1,0 +1,305 @@
+// APPLIED 2026-09-06, approved by Andre in three steps: identity/ACL first, the
+// finance domain second, then StatementHolding + the reconciliation fields once
+// the real Gotrade statements showed what they carry.
+//
+// Two layers:
+//   1. Identity/ACL — the minimum the engine requires.
+//   2. Finance domain — accounts, securities, imports, and ONE transaction
+//      ledger that carries both cash movements and trades.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ─────────────────────────── identity & access ───────────────────────────
+// Field names and @@map targets are COPIED FROM kanoapp, deliberately. The
+// engine's ACL queries `prisma.rolePermission` selecting resource/action/fields/
+// fieldsDeny/scope, and reads user.nickname / user.isAdmin / user.roles. Renaming
+// any of those here would mean forking the engine's ACL for this app, which is
+// the exact duplication this whole exercise exists to avoid.
+
+model User {
+  id           BigInt   @id @default(autoincrement())
+  email        String   @unique
+  nickname     String?
+  passwordHash String
+  isAdmin      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roles              UserRole[]
+  linkedFieldOptions FieldOption[] @relation("FieldOptionUser")
+
+  @@map("users")
+}
+
+model Role {
+  id              BigInt   @id @default(autoincrement())
+  name            String   @unique // machine key
+  title           String? // human label for the admin UI
+  description     String?  @db.Text
+  /// Strategy for resources with NO explicit permission row. "deny" is the
+  /// project decision; kept per-role for a future "broad viewer" override.
+  defaultStrategy String   @default("deny") @map("default_strategy")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("role")
+}
+
+model UserRole {
+  userId BigInt @map("user_id")
+  roleId BigInt @map("role_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_role")
+}
+
+model RolePermission {
+  id         BigInt @id @default(autoincrement())
+  roleId     BigInt @map("role_id")
+  role       Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  resource   String
+  action     String // "view" | "create" | "update" | "delete" | "*"
+  fields     Json? // string[] allowlist
+  fieldsDeny Json? // string[] denylist — overrides allow
+  scope      Json? // filter object, e.g. {"ownerId":"$currentUser"}
+
+  @@unique([roleId, resource, action])
+  @@index([roleId])
+  @@map("role_permission")
+}
+
+model AppSetting {
+  id        BigInt   @id @default(autoincrement())
+  group     String
+  key       String   @unique
+  label     String?
+  valueType String   @map("value_type") // "number" | "string" | "json"
+  value     String   @db.Text
+  sortOrder Int      @default(0) @map("sort_order")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_setting")
+}
+
+model FieldOption {
+  id        BigInt  @id @default(autoincrement())
+  fieldKey  String  @map("field_key")
+  value     String
+  label     String
+  color     String? // antd Tag color token
+  sortOrder Int     @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+
+  userId BigInt? @map("user_id")
+  user   User?   @relation("FieldOptionUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  accountsAsProvider Account[] @relation("AccountProviderOption")
+
+  @@unique([fieldKey, value])
+  @@index([fieldKey])
+  @@index([userId])
+  @@map("field_options")
+}
+
+// ─────────────────────────── finance domain ───────────────────────────
+
+/// One place money sits: a bank account, or a brokerage account.
+/// "One app may have multiple Gotrade" — so this is per ACCOUNT, not per
+/// provider. The left-hand menu is built from these rows, so adding an account
+/// adds a menu entry with no code change.
+model Account {
+  id                BigInt      @id @default(autoincrement())
+  name              String // "Gotrade — Main"
+  /// GOTRADE | BCA | IPOT. A real FK to FieldOption, not a loose string:
+  /// project rule is enforced foreign keys, and it means adding a broker is a
+  /// row on the Field Options screen rather than a migration.
+  providerId        BigInt      @map("provider_id")
+  provider          FieldOption @relation("AccountProviderOption", fields: [providerId], references: [id])
+  kind              String // BANK | BROKERAGE
+  currency          String // the account's OWN currency: USD for Gotrade, IDR for BCA
+  /// The broker's own account number ("933194961" on every Gotrade statement).
+  /// This is how an uploaded file is matched to the right account without asking.
+  externalAccountNo String?     @map("external_account_no")
+  openedAt          DateTime?   @db.Date
+  isActive          Boolean     @default(true)
+  sortOrder         Int         @default(0)
+  notes             String?     @db.Text
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  transactions Transaction[]
+  imports      StatementImport[]
+
+  @@unique([providerId, externalAccountNo])
+  @@index([kind, isActive, sortOrder])
+}
+
+/// A tradeable instrument. Shared across accounts on purpose: holding AAPL in
+/// two Gotrade accounts must roll up to one position in the combined report.
+model Security {
+  id        BigInt  @id @default(autoincrement())
+  symbol    String
+  name      String?
+  exchange  String?
+  currency  String  @default("USD")
+  assetType String? // STOCK | ETF | ADR ...
+
+  transactions Transaction[]
+  holdings     StatementHolding[]
+
+  @@unique([symbol, exchange])
+}
+
+/// One uploaded file. Exists so an import is auditable and, above all,
+/// REPEATABLE: monthly exports overlap, and re-uploading a month must never
+/// double-count. `fileChecksum` makes re-uploading the identical file a no-op;
+/// Transaction.dedupeKey handles the harder case of the same trade arriving in
+/// two different files.
+model StatementImport {
+  id               BigInt    @id @default(autoincrement())
+  accountId        BigInt
+  account          Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  fileName         String
+  fileChecksum     String // sha256 of the uploaded bytes
+  kind             String // TRADES | STATEMENT — the two exports differ in content
+  periodStart      DateTime? @db.Date
+  periodEnd        DateTime? @db.Date
+  rowsParsed       Int       @default(0)
+  rowsInserted     Int       @default(0)
+  rowsSkipped      Int       @default(0) // already present — the dedupe working
+  /// The Cash Summary as PRINTED on the statement. Stored rather than merely
+  /// checked, so a later parser change can be re-verified against what the
+  /// broker actually said, and so the Imports list can show which balanced.
+  beginningBalance Decimal?  @map("beginning_balance") @db.Decimal(24, 4)
+  additionTotal    Decimal?  @map("addition_total") @db.Decimal(24, 4)
+  subtractionTotal Decimal?  @map("subtraction_total") @db.Decimal(24, 4)
+  tradeTotal       Decimal?  @map("trade_total") @db.Decimal(24, 4)
+  feeTotal         Decimal?  @map("fee_total") @db.Decimal(24, 4)
+  endingBalance    Decimal?  @map("ending_balance") @db.Decimal(24, 4)
+  /// beginning + addition - subtraction + trades + fees == ending, AND the parsed
+  /// rows sum to those totals. False means DO NOT TRUST this import's numbers.
+  reconciled       Boolean   @default(false)
+  reconcileNote    String?   @map("reconcile_note") @db.Text
+
+  status     String   @default("pending") // pending | ok | failed
+  error      String?  @db.Text
+  storageKey String? // the original file, kept so a parser fix can re-run it
+  createdAt  DateTime @default(now())
+
+  transactions Transaction[]
+  holdings     StatementHolding[]
+
+  @@unique([accountId, fileChecksum])
+  @@index([accountId, periodStart])
+}
+
+/// THE LEDGER. Cash movements and trades in one table, deliberately.
+///
+/// The end goal — "is he saving or losing" — is an income/expense question, and
+/// that is answered by DEPOSIT/WITHDRAWAL/DIVIDEND/FEE rows, not by trades.
+/// Splitting trades and cash into two tables would mean every report joining
+/// them back together. Positions and gains are DERIVED from this ledger and
+/// never stored, so they cannot drift from the transactions that produced them.
+model Transaction {
+  id         BigInt           @id @default(autoincrement())
+  accountId  BigInt
+  account    Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  importId   BigInt?
+  import     StatementImport? @relation(fields: [importId], references: [id], onDelete: SetNull)
+  securityId BigInt?
+  security   Security?        @relation(fields: [securityId], references: [id])
+
+  tradeDate  DateTime  @db.Date
+  settleDate DateTime? @db.Date
+
+  /// BUY | SELL | DIVIDEND | DEPOSIT | WITHDRAWAL | FEE | INTEREST | TAX
+  /// | SPLIT | TRANSFER_IN | TRANSFER_OUT | FX | ADJUSTMENT
+  type String
+
+  /// Decimal, never Float — this is money. 8dp because Gotrade sells fractional
+  /// shares, and rounding a fraction of a share corrupts the cost basis.
+  quantity    Decimal? @db.Decimal(24, 8)
+  price       Decimal? @db.Decimal(24, 8)
+  grossAmount Decimal? @db.Decimal(24, 4)
+  fee         Decimal? @db.Decimal(24, 4)
+  tax         Decimal? @db.Decimal(24, 4)
+  /// Signed, in the account's currency. Positive = money into the account.
+  netAmount   Decimal  @db.Decimal(24, 4)
+  currency    String
+
+  // NO stored FX rate, by decision (Andre, 2026-09-06): "store different
+  // currency differently. Later when we need combined report we will use
+  // current conversion rate". So every amount stays in the account's OWN
+  // currency, untouched, and conversion happens at REPORT time against the
+  // rate of the day you look. Consequences, so they are not a surprise later:
+  //   - A USD account's gain is a pure USD gain. No currency movement is mixed
+  //     into it, which is what makes per-stock performance honest.
+  //   - The combined IDR number is therefore "what this is worth today", and it
+  //     will move when the rate moves even if nothing was bought or sold.
+  //   - A historical combined chart cannot be rebuilt from this alone. If you
+  //     ever want one, we add a daily rate table then — the ledger does not
+  //     need to change for it, which is why not storing a rate is safe now.
+
+  description String? @db.Text
+  externalRef String? // the broker's own id, when the export carries one
+
+  /// Deterministic hash of the identifying fields. THE idempotency guarantee:
+  /// upload January twice, or upload an overlapping Dec–Jan export, and the
+  /// second pass inserts nothing.
+  dedupeKey String
+
+  rawRow    Json? // the source row as parsed, so a mapping bug is diagnosable
+  createdAt DateTime @default(now())
+
+  @@unique([accountId, dedupeKey])
+  @@index([accountId, tradeDate])
+  @@index([securityId, tradeDate])
+  @@index([accountId, type, tradeDate])
+}
+
+/// One holding, as the broker stated it at a period end.
+///
+/// THE ONLY PRICE SOURCE WE HAVE. Gotrade has no API, so the Holdings block on
+/// each monthly statement is the sole record of what anything was WORTH. Without
+/// it the app can report what was paid and never what it is worth — no portfolio
+/// value over time, no unrealized gain. Each monthly statement contributes one
+/// price point per holding, so uploading the back-catalogue builds real history.
+///
+/// The statement's "*Cash" row is deliberately NOT stored here — it is the cash
+/// balance and already lives on StatementImport.endingBalance.
+model StatementHolding {
+  id       BigInt          @id @default(autoincrement())
+  importId BigInt          @map("import_id")
+  import   StatementImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  securityId BigInt   @map("security_id")
+  security   Security @relation(fields: [securityId], references: [id])
+
+  /// Period end the figures describe — the price date for charting.
+  asOf DateTime @db.Date
+
+  quantity    Decimal  @db.Decimal(24, 8)
+  marketPrice Decimal? @map("market_price") @db.Decimal(24, 8)
+  marketValue Decimal? @map("market_value") @db.Decimal(24, 4)
+  costPrice   Decimal? @map("cost_price") @db.Decimal(24, 8)
+  unrealized  Decimal? @db.Decimal(24, 4)
+  costBasis   Decimal? @map("cost_basis") @db.Decimal(24, 4)
+
+  createdAt DateTime @default(now())
+
+  @@unique([importId, securityId])
+  @@index([securityId, asOf])
+  @@map("statement_holding")
+}
