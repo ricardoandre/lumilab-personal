@@ -114,6 +114,7 @@ for (const [name, path, expect] of [
   ['my account', '/account', 'Change password'],
   ['users', '/users', 'ricardo.4ndre@gmail.com'],
   ['field options', '/field-options', 'Gotrade'],
+  ['gotrade report', '/accounts/1/report', 'Individual stocks'],
 ]) {
   await goto(BASE + path);
   const text = await evaluate(`document.body.innerText`);

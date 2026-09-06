@@ -25,7 +25,17 @@ export function NavAccounts() {
                 ...g,
                 entries: [
                   { label: 'All Accounts', href: '/accounts' },
-                  ...d.accounts.map((a) => ({ label: a.name, href: `/accounts/${a.id}` })),
+                  // Each account contributes a SUBGROUP: the account itself plus
+                  // its tools. Andre: "each gotrade will have set of tools we are
+                  // building" — so the tools hang off the account, not off a
+                  // global menu that would grow with every account added.
+                  ...d.accounts.map((a) => ({
+                    label: a.name,
+                    items: [
+                      { label: 'Overview', href: `/accounts/${a.id}` },
+                      { label: 'Report', href: `/accounts/${a.id}/report` },
+                    ],
+                  })),
                   { label: 'Statement Imports', badge: 'next' as const },
                 ],
               }

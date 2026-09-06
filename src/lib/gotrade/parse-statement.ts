@@ -175,7 +175,11 @@ export function parseStatement(text: string): ParsedStatement {
     const date = row.match(DATE_START)![1];
     const amount = lastMoney(row);
     if (amount === null) continue;
-    const sym = row.match(/\b([A-Z]{1,5}(?:\.[A-Z])?)\b(?=\s)/);
+    // Search for the ticker AFTER the entry type, never across the whole row.
+    // "Div. Adj(NRA Withheld) SPY ..." otherwise yields NRA — which duly turned
+    // up in the database as a security alongside SPY and BRK.B.
+    const afterType = row.replace(DATE_START, '').replace(/^\s*(Dividends?|Div\. Adj\([^)]*\)|Journal Entry\([^)]*\)|Interest)\s*/i, '');
+    const sym = afterType.match(/^([A-Z]{1,5}(?:\.[A-Z])?)\b/);
     const isTax = /NRA Withheld|withholding|Div\. Adj/i.test(row);
     const isDiv = /Dividend/i.test(row);
     const entryType =
