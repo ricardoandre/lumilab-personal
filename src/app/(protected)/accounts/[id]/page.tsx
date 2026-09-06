@@ -2,58 +2,62 @@ import { notFound } from 'next/navigation';
 import '@/engine.server';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/require-user';
-import { monthlySeries, benchmarkMonthly, yearlyVsBenchmark, overviewFrom, stockReport } from '@/lib/gotrade/report';
-import { AccountOverview } from '@/components/AccountOverview';
+import {
+  monthlySeries, benchmarkMonthly, yearlyVsBenchmark, overviewFrom, stockReport,
+  missingMonths, failedImports,
+} from '@/lib/gotrade/report';
+import { AccountDashboard } from '@/components/AccountDashboard';
+import { loadAccount } from '@/lib/account-page';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AccountPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AccountDashboardPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
-  let accountId: bigint;
-  try { accountId = BigInt(id); } catch { notFound(); }
+  const { accountId, account } = await loadAccount(id);
+  if (!account) notFound();
 
-  const a = await prisma.account.findUnique({ where: { id: accountId! }, include: { provider: true } });
-  if (!a) notFound();
-
-  const [months, bench, stocks, newest] = await Promise.all([
-    monthlySeries(prisma, accountId!),
-    benchmarkMonthly(prisma, accountId!),
-    stockReport(prisma, accountId!),
-    prisma.statementImport.findFirst({
-      where: { accountId: accountId!, status: 'ok' },
-      orderBy: { periodEnd: 'desc' },
-      select: { periodEnd: true },
-    }),
+  const [months, bench, stocks, missing, failed] = await Promise.all([
+    monthlySeries(prisma, accountId),
+    benchmarkMonthly(prisma, accountId),
+    stockReport(prisma, accountId),
+    missingMonths(prisma, accountId),
+    failedImports(prisma, accountId),
   ]);
 
-  // How far behind the figures are. Quiet when current, a warning when not:
-  // a four-month-old number looks exactly like a fresh one otherwise.
-  const asAt = newest?.periodEnd
+  const years = yearlyVsBenchmark(months, bench);
+  // "This year" is the newest year present in the data, not the wall-clock year:
+  // the statements can be months behind, and an empty box would be the result.
+  const latestYear = years.length ? years[years.length - 1] : null;
+  const thisYearMonths = latestYear ? months.filter((m) => m.period.startsWith(latestYear.year)) : [];
+
+  const newest = months.length ? months[months.length - 1] : null;
+  const asAt = newest
     ? (() => {
-        const end = newest.periodEnd!;
+        const [y, m] = newest.period.split('-').map(Number);
         const now = new Date();
-        const monthsBehind =
-          (now.getUTCFullYear() - end.getUTCFullYear()) * 12 + (now.getUTCMonth() - end.getUTCMonth());
         return {
-          period: end.toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }),
-          monthsBehind: Math.max(0, monthsBehind),
+          period: new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }),
+          monthsBehind: Math.max(0, (now.getUTCFullYear() - y) * 12 + (now.getUTCMonth() - (m - 1))),
         };
       })()
     : null;
 
   return (
-    <AccountOverview
+    <AccountDashboard
       accountId={id}
-      accountName={a.name}
-      provider={a.provider.label}
-      currency={a.currency}
-      accountNo={a.externalAccountNo}
+      accountName={account.name}
+      provider={account.provider.label}
+      currency={account.currency}
+      accountNo={account.externalAccountNo}
       overview={overviewFrom(months, bench)}
-      years={yearlyVsBenchmark(months, bench)}
-      months={months}
       stocks={stocks}
+      months={months}
+      thisYear={latestYear}
+      thisYearMonths={thisYearMonths.length >= 2 ? thisYearMonths : months.slice(-12)}
       asAt={asAt}
+      missing={missing}
+      failed={failed}
     />
   );
 }

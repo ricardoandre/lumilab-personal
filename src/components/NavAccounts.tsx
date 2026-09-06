@@ -32,14 +32,17 @@ export function NavAccounts() {
                   ...d.accounts.map((a) => ({
                     label: a.name,
                     items: [
-                      { label: 'Overview', href: `/accounts/${a.id}` },
+                      { label: 'Dashboard', href: `/accounts/${a.id}` },
                       {
                         label: 'Report',
                         href: `/accounts/${a.id}/report`,
                         // The Transactions tab is a sibling ROUTE under the same
                         // nav entry; without this the entry loses its highlight
                         // when you switch tabs.
-                        matchHrefs: [`/accounts/${a.id}/report/transactions`],
+                        matchHrefs: [
+                          `/accounts/${a.id}/report/stocks`,
+                          `/accounts/${a.id}/report/transactions`,
+                        ],
                       },
                     ],
                   })),

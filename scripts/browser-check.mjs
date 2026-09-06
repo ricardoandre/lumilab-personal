@@ -120,13 +120,15 @@ if (!signedIn) {
 for (const [name, path, expect] of [
   ['dashboard', '/', 'Overview'],
   ['accounts', '/accounts', 'Andre Gotrade'],
-  ['account overview', '/accounts/1', 'Your stocks now'],
+  ['account dashboard', '/accounts/1', 'Full report'],
   ['my account', '/account', 'Change password'],
   ['users', '/users', 'ricardo.4ndre@gmail.com'],
   ['field options', '/field-options', 'Gotrade'],
-  ['stocks report', '/accounts/1/report', 'Return a year'],
+  ['overview report', '/accounts/1/report', 'Year by year'],
+  ['stocks report', '/accounts/1/report/stocks', 'Return a year'],
   ['transactions', '/accounts/1/report/transactions', 'DEPOSIT'.toLowerCase()],
   ['upload button', '/accounts/1', 'Upload'],
+  ['missing-statement warning', '/accounts/1', 'missing'],
 ]) {
   await goto(BASE + path);
   const text = await evaluate(`document.body.innerText`);

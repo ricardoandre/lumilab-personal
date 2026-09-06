@@ -89,15 +89,15 @@ export async function monthlySeries(db: Db, accountId: bigint): Promise<MonthRow
     const portfolioValue = r2(cash + holdingsValue);
 
     const inMonth = txs.filter((t: any) => t.tradeDate >= monthStart && t.tradeDate <= end);
-    // JOURNAL is NOT a contribution. Those rows are Gotrade's own promotional
-    // credits — "Campaign reward Highvaluedeposit July $80.00" — money the
-    // broker gave, not money Andre paid in. Counting them as contributions
-    // claimed he had funded $84 he never funded, and suppressed the return his
-    // actual capital earned. They belong with income.
-    const flows = inMonth.filter((t: any) => ['DEPOSIT', 'WITHDRAWAL'].includes(t.type));
+    // JOURNAL counts as FUNDING, by Andre's decision (2026-09-06): "keep it as
+    // fund". These are Gotrade's promotional credits — "Campaign reward
+    // Highvaluedeposit July $80.00" — money that arrived from outside rather
+    // than something the investments earned. Treating them as income would let
+    // a broker giveaway inflate the reported performance of his own capital.
+    const flows = inMonth.filter((t: any) => ['DEPOSIT', 'WITHDRAWAL', 'JOURNAL'].includes(t.type));
     const contributions = r2(flows.reduce((a: number, t: any) => a + num(t.netAmount), 0));
     const income = r2(
-      inMonth.filter((t: any) => ['DIVIDEND', 'INTEREST', 'TAX', 'JOURNAL'].includes(t.type))
+      inMonth.filter((t: any) => ['DIVIDEND', 'INTEREST', 'TAX'].includes(t.type))
         .reduce((a: number, t: any) => a + num(t.netAmount), 0),
     );
     const sumOf = (types: string[]) =>
@@ -373,4 +373,46 @@ export function overviewFrom(months: MonthRow[], bench: Map<string, number>): Ov
     lastPeriod: latest.period,
     cashDragUsd: dragKnown ? r2(drag) : null,
   };
+}
+
+/**
+ * Months absent from an account's statement run.
+ *
+ * A gap is not cosmetic: every figure between the two sides of it is wrong, and
+ * nothing on screen would otherwise say so. September 2025 went missing after a
+ * failed upload and only turned up in a hand-run audit.
+ */
+export async function missingMonths(db: Db, accountId: bigint): Promise<string[]> {
+  const imps = await db.statementImport.findMany({
+    where: { accountId, status: 'ok', periodEnd: { not: null } },
+    orderBy: { periodEnd: 'asc' },
+    select: { periodEnd: true },
+  });
+  if (imps.length < 2) return [];
+
+  const have = new Set<string>(imps.map((i: any) => i.periodEnd.toISOString().slice(0, 7)));
+  const first = imps[0].periodEnd as Date;
+  const last = imps[imps.length - 1].periodEnd as Date;
+
+  const out: string[] = [];
+  let y = first.getUTCFullYear();
+  let m = first.getUTCMonth() + 1;
+  const endY = last.getUTCFullYear();
+  const endM = last.getUTCMonth() + 1;
+  while (y < endY || (y === endY && m <= endM)) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    if (!have.has(key)) out.push(key);
+    if (m === 12) { y += 1; m = 1; } else { m += 1; }
+  }
+  return out;
+}
+
+/** Statements that were refused, so the reason is visible without digging. */
+export async function failedImports(db: Db, accountId: bigint): Promise<{ fileName: string; reason: string }[]> {
+  const rows = await db.statementImport.findMany({
+    where: { accountId, status: 'failed' },
+    orderBy: { createdAt: 'desc' },
+    select: { fileName: true, reconcileNote: true },
+  });
+  return rows.map((r: any) => ({ fileName: r.fileName, reason: r.reconcileNote ?? 'did not balance' }));
 }

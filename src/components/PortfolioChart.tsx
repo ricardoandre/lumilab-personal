@@ -10,7 +10,7 @@ import { usd0 } from './money';
  * Hand-drawn SVG rather than a charting library: one chart does not justify
  * ~200KB of JavaScript on a phone, which is where this is mostly read.
  */
-export function PortfolioChart({ months }: { months: MonthRow[] }) {
+export function PortfolioChart({ months, bare }: { months: MonthRow[]; bare?: boolean }) {
   const screens = Grid.useBreakpoint();
   const h = screens.lg ? 220 : 160;
   const w = 720; // viewBox units; the SVG scales to its container
@@ -41,9 +41,9 @@ export function PortfolioChart({ months }: { months: MonthRow[] }) {
   const last = pts[pts.length - 1];
   const years = [...new Set(pts.map((p) => p.period.slice(0, 4)))];
 
-  return (
-    <Card styles={{ body: { padding: 12 } }}>
-      <Typography.Text strong>Portfolio value</Typography.Text>
+  const inner = (
+    <>
+      {!bare && <Typography.Text strong>Portfolio value</Typography.Text>}
       <div style={{ display: 'flex', gap: 16, margin: '4px 0 8px', flexWrap: 'wrap', fontSize: 12 }}>
         <span><span style={{ display: 'inline-block', width: 10, height: 3, background: '#26344b', marginRight: 6, verticalAlign: 'middle' }} />Total {usd0(last.value)}</span>
         <span><span style={{ display: 'inline-block', width: 10, height: 3, background: '#b9b3a8', marginRight: 6, verticalAlign: 'middle' }} />You paid in {usd0(last.paid)}</span>
@@ -63,6 +63,9 @@ export function PortfolioChart({ months }: { months: MonthRow[] }) {
           );
         })}
       </svg>
-    </Card>
+    </>
   );
+
+  // `bare` drops the Card frame for callers that already provide one.
+  return bare ? <div>{inner}</div> : <Card styles={{ body: { padding: 12 } }}>{inner}</Card>;
 }

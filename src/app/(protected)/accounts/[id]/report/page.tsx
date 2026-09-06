@@ -1,31 +1,36 @@
 import { notFound } from 'next/navigation';
-import { Typography, Space } from 'antd';
 import '@/engine.server';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/require-user';
-import { stockReport } from '@/lib/gotrade/report';
-import { ReportTabs } from '@/components/ReportTabs';
-import { StocksReport } from '@/components/StocksReport';
-import { ReportHeading } from '@/components/ReportHeading';
+import { monthlySeries, benchmarkMonthly, yearlyVsBenchmark, overviewFrom, stockReport } from '@/lib/gotrade/report';
+import { loadAccount } from '@/lib/account-page';
+import { reportHealth } from '@/lib/report-page';
+import { ReportShell } from '@/components/ReportShell';
+import { AccountOverview } from '@/components/AccountOverview';
 
 export const dynamic = 'force-dynamic';
 
-export default async function StocksPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function OverviewReportPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
-  let accountId: bigint;
-  try { accountId = BigInt(id); } catch { notFound(); }
-
-  const account = await prisma.account.findUnique({ where: { id: accountId! } });
+  const { accountId, account } = await loadAccount(id);
   if (!account) notFound();
 
-  const stocks = await stockReport(prisma, accountId!);
+  const [months, bench, stocks, health] = await Promise.all([
+    monthlySeries(prisma, accountId),
+    benchmarkMonthly(prisma, accountId),
+    stockReport(prisma, accountId),
+    reportHealth(accountId),
+  ]);
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <ReportHeading name={account.name} />
-      <ReportTabs accountId={id} />
-      <StocksReport stocks={stocks} />
-    </Space>
+    <ReportShell accountId={id} accountName={account.name} {...health}>
+      <AccountOverview
+        overview={overviewFrom(months, bench)}
+        years={yearlyVsBenchmark(months, bench)}
+        months={months}
+        stocks={stocks}
+      />
+    </ReportShell>
   );
 }

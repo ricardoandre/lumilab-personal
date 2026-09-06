@@ -1,28 +1,28 @@
 import { notFound } from 'next/navigation';
-import { Space } from 'antd';
 import '@/engine.server';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/require-user';
-import { ReportTabs } from '@/components/ReportTabs';
+import { loadAccount } from '@/lib/account-page';
+import { reportHealth } from '@/lib/report-page';
+import { ReportShell } from '@/components/ReportShell';
 import { TransactionsReport, type TxRow } from '@/components/TransactionsReport';
-import { ReportHeading } from '@/components/ReportHeading';
 
 export const dynamic = 'force-dynamic';
 
 export default async function TransactionsPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
-  let accountId: bigint;
-  try { accountId = BigInt(id); } catch { notFound(); }
-
-  const account = await prisma.account.findUnique({ where: { id: accountId! } });
+  const { accountId, account } = await loadAccount(id);
   if (!account) notFound();
 
-  const txs = await prisma.transaction.findMany({
-    where: { accountId: accountId! },
-    orderBy: [{ tradeDate: 'desc' }, { id: 'desc' }],
-    include: { security: true },
-  });
+  const [txs, health] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { accountId },
+      orderBy: [{ tradeDate: 'desc' }, { id: 'desc' }],
+      include: { security: true },
+    }),
+    reportHealth(accountId),
+  ]);
 
   const rows: TxRow[] = txs.map((t) => ({
     key: String(t.id),
@@ -36,10 +36,8 @@ export default async function TransactionsPage({ params }: { params: Promise<{ i
   }));
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <ReportHeading name={account.name} />
-      <ReportTabs accountId={id} />
+    <ReportShell accountId={id} accountName={account.name} {...health}>
       <TransactionsReport rows={rows} />
-    </Space>
+    </ReportShell>
   );
 }
