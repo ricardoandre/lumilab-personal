@@ -110,6 +110,10 @@ report('signed in (left /login)', !(await evaluate(`location.pathname`)).startsW
 for (const [name, path, expect] of [
   ['dashboard', '/', 'Overview'],
   ['accounts', '/accounts', 'Andre Gotrade'],
+  ['account detail', '/accounts/1', 'Andre Gotrade'],
+  ['my account', '/account', 'Change password'],
+  ['users', '/users', 'ricardo.4ndre@gmail.com'],
+  ['field options', '/field-options', 'Gotrade'],
 ]) {
   await goto(BASE + path);
   const text = await evaluate(`document.body.innerText`);
@@ -118,6 +122,13 @@ for (const [name, path, expect] of [
   report(`${name}: no uncaught errors`, errors.length === 0, errors.slice(0, 2).join(' | '));
 }
 
+if (process.env.PEEK) {
+  await goto(BASE + '/accounts');
+  console.log('\n--- SIDEBAR TEXT ---');
+  console.log(await evaluate(`(document.querySelector('.ant-layout-sider')?.innerText || 'no sider')`));
+  console.log('\n--- HEADER TEXT ---');
+  console.log(await evaluate(`(document.querySelector('.ant-layout-header')?.innerText || 'no header')`));
+}
 ws.close(); chrome.kill();
 console.log(failed ? '\nRESULT: FAIL' : '\nRESULT: ALL CLEAR');
 process.exit(failed ? 1 : 0);

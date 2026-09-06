@@ -9,6 +9,7 @@ import { authProvider } from '@lumilab/engine/lib/auth-provider';
 import { AppHeader, AppTitle, AppSider } from '@lumilab/engine/ui';
 import { useAppNotificationProvider } from '@lumilab/engine/ui/notification-provider';
 import { EntityDrawerHost } from '@lumilab/engine/ui/EntityDrawerHost';
+import { NavAccounts } from '@/components/NavAccounts';
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -22,6 +23,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
         options={{ syncWithLocation: true, disableTelemetry: true }}
       >
         <ThemedLayout Header={AppHeader} Title={AppTitle} Sider={AppSider}>{children}</ThemedLayout>
+        <NavAccounts />
         <EntityDrawerHost />
       </Refine>
     </Suspense>

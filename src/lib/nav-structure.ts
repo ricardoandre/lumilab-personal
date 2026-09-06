@@ -3,16 +3,9 @@ import type { NavGroup } from '@lumilab/engine/nav-types';
 /**
  * The sidebar.
  *
- * Entries with no `href` render as non-clickable placeholders on purpose. Next
- * PREFETCHES every visible link, so a nav entry pointing at an unbuilt page 404s
- * on page load without anyone clicking it — which is how /imports was caught,
- * against the live domain, by the browser check. A route only gets an href once
- * the page exists.
- *
- * Andre's requirement is that the menu IS the list of accounts ("the menu on the
- * left will be list of all finance and investment available"), so account
- * entries will be generated from the Account table. This static skeleton is what
- * surrounds them.
+ * Entries with no `href` render as non-clickable placeholders on purpose: Next
+ * PREFETCHES every visible link, so an entry pointing at an unbuilt page 404s on
+ * page load without anyone clicking it. A route gets an href once its page exists.
  */
 export const NAV_GROUPS: NavGroup[] = [
   {
@@ -26,11 +19,17 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Statement Imports', badge: 'next' },
     ],
   },
-  {
-    label: 'Admin',
-    entries: [
-      { label: 'Field Options', badge: 'soon' },
-      { label: 'Users', badge: 'soon' },
-    ],
-  },
 ];
+
+/**
+ * Admin-only group, appended by the engine. Supplied here rather than by the
+ * engine itself — the engine used to hardcode kanoapp's admin menu, so this app
+ * showed a second group labelled ADMIN full of routes it does not have.
+ */
+export const ADMIN_NAV: NavGroup = {
+  label: 'Admin',
+  entries: [
+    { label: 'Users', href: '/users' },
+    { label: 'Field Options', href: '/field-options' },
+  ],
+};
