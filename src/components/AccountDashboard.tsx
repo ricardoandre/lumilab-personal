@@ -6,9 +6,10 @@ import type { MonthRow, Overview, StockRow, YearVsBench } from '@/lib/gotrade/re
 import { ResponsiveRows } from './ResponsiveRows';
 import { StatementUploadButton } from './StatementUploadButton';
 import { PortfolioChart } from './PortfolioChart';
-import { StatCard, BreakdownLine, BreakdownNote, BreakdownStack } from './StatCard';
+import { AccountStats } from './AccountStats';
 import { DataHealthAlert } from './DataHealthAlert';
-import { usd, usd0, Pct, Money } from './money';
+import { YearMetrics } from './YearMetrics';
+import { usd0, Pct, Money } from './money';
 
 const GREEN = '#237804';
 const RED = '#a8071a';
@@ -48,71 +49,7 @@ export function AccountDashboard({
           description="Upload your monthly statements and the reports will build themselves." />
       ) : (
         <>
-          <Row gutter={[12, 12]}>
-            <Col xs={12} lg={6}>
-              <StatCard small={isMobile} title="Portfolio value" value={usd(overview.latestValue)}
-                drawerTitle="What makes up the value"
-                breakdown={
-                  <BreakdownStack>
-                    {stocks.map((s) => (
-                      <BreakdownLine key={s.symbol} label={s.symbol} note={s.name ?? undefined} value={<Money v={s.marketValue} />} />
-                    ))}
-                    <BreakdownLine label="Cash" note="uninvested" value={<Money v={overview.cash} />} divider />
-                    <BreakdownLine label="Total" value={<Money v={overview.latestValue} />} strong divider />
-                    <BreakdownNote>
-                      Share prices are those printed on your latest statement — the only price source
-                      there is, since Gotrade has no API.
-                    </BreakdownNote>
-                  </BreakdownStack>
-                } />
-            </Col>
-            <Col xs={12} lg={6}>
-              <StatCard small={isMobile} title="Total return" value={pct(overview.sinceInception)}
-                valueColor={(overview.sinceInception ?? 0) >= 0 ? GREEN : RED}
-                drawerTitle="Return by stock"
-                breakdown={
-                  <BreakdownStack>
-                    {stocks.map((s) => (
-                      <BreakdownLine key={s.symbol} label={s.symbol} note={s.name ?? undefined}
-                        value={<Pct v={s.returnPct} />} />
-                    ))}
-                    <BreakdownLine label="Whole account" value={<Pct v={overview.sinceInception} />} strong divider />
-                    <BreakdownNote>
-                      Percentages only — the money each of these is worth is under Investment earned.
-                      The account figure is time-weighted, so it is not the average of the rows above:
-                      money you paid in is never counted as a gain.
-                    </BreakdownNote>
-                  </BreakdownStack>
-                } />
-            </Col>
-            <Col xs={12} lg={6}>
-              <StatCard small={isMobile} title="Return a year" value={pct(overview.annualised)}
-                valueColor={(overview.annualised ?? 0) >= 0 ? GREEN : RED} />
-            </Col>
-            <Col xs={12} lg={6}>
-              <StatCard small={isMobile} title="Investment earned" value={usd0(overview.gain)}
-                valueColor={overview.gain >= 0 ? GREEN : RED}
-                drawerTitle="Where the money came from"
-                breakdown={
-                  <BreakdownStack>
-                    <BreakdownLine label="Share price growth" value={<Money v={overview.priceGrowth} />} />
-                    <BreakdownLine label="Dividends received" value={<Money v={overview.dividends} />} />
-                    <BreakdownLine label="Withholding tax" note="15% US tax on dividends" value={<Money v={overview.tax} />} />
-                    <BreakdownLine label="Total earned" value={<Money v={overview.gain} />} strong divider />
-                    <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>By stock</div>
-                    {stocks.map((s) => (
-                      <BreakdownLine key={s.symbol} label={s.symbol}
-                        note={s.dividends ? `${usd(s.unrealized)} price + ${usd(s.dividends)} dividends` : 'price growth'}
-                        value={<Money v={s.totalReturn} />} />
-                    ))}
-                    <BreakdownNote>
-                      Gotrade&apos;s promotional credits ({usd(overview.rewards)}) count as money paid in,
-                      not as return, so a broker giveaway cannot flatter how your own capital performed.
-                    </BreakdownNote>
-                  </BreakdownStack>
-                } />
-            </Col>
-          </Row>
+          <AccountStats overview={overview} stocks={stocks} />
 
           <Card size={size}>
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
@@ -133,18 +70,18 @@ export function AccountDashboard({
             </Space>
           </Card>
 
+          <Link href={`/accounts/${accountId}/report`}>
+            <Button block size="large">Full report →</Button>
+          </Link>
+
           {thisYear && (
             <Card
               title={`${thisYear.year} so far`}
               size={size}
               styles={{ body: { padding: 0 } }}
-              extra={
-                <span style={{ fontSize: 13 }}>
-                  you <Pct v={thisYear.returnPct} bold /> · SPY <Pct v={thisYear.benchmarkPct} />
-                </span>
-              }
             >
               <div style={{ padding: 12 }}>
+                <YearMetrics year={thisYear} cash={overview.cash} />
                 <PortfolioChart months={thisYearMonths} bare />
               </div>
               <ResponsiveRows<StockRow & { key: string }>
@@ -159,9 +96,6 @@ export function AccountDashboard({
             </Card>
           )}
 
-          <Link href={`/accounts/${accountId}/report`}>
-            <Button block size="large">Full report →</Button>
-          </Link>
         </>
       )}
     </Space>

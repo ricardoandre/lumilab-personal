@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, Typography, Space, Row, Col, Tag, Alert, Grid, Button, Statistic } from 'antd';
+import { Card, Typography, Space, Tag, Alert, Grid, Button } from 'antd';
 import type { MonthRow, YearVsBench, Overview, StockRow } from '@/lib/gotrade/report';
 import { ResponsiveRows } from './ResponsiveRows';
 import { PortfolioChart } from './PortfolioChart';
-import { usd, usd0, Pct, Money } from './money';
+import { usd0, Pct, Money } from './money';
+import { AccountStats } from './AccountStats';
 
 const YEARS_SHOWN = 3;
 const GREEN = '#237804';
@@ -38,23 +39,7 @@ export function AccountOverview({
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Row gutter={[12, 12]}>
-        <Col xs={12} lg={6}><Card size={size}>
-          <Statistic title="Portfolio value" value={usd(overview.latestValue)} />
-        </Card></Col>
-        <Col xs={12} lg={6}><Card size={size}>
-          <Statistic title="Total return" value={pct(overview.sinceInception)}
-            valueStyle={{ color: (overview.sinceInception ?? 0) >= 0 ? GREEN : RED }} />
-        </Card></Col>
-        <Col xs={12} lg={6}><Card size={size}>
-          <Statistic title="Return a year" value={pct(overview.annualised)}
-            valueStyle={{ color: (overview.annualised ?? 0) >= 0 ? GREEN : RED }} />
-        </Card></Col>
-        <Col xs={12} lg={6}><Card size={size}>
-          <Statistic title="Investment earned" value={usd0(overview.gain)}
-            valueStyle={{ color: overview.gain >= 0 ? GREEN : RED }} />
-        </Card></Col>
-      </Row>
+      <AccountStats overview={overview} stocks={stocks} clickable={false} />
 
       <Card size={size}>
         <Typography.Text type="secondary" style={{ fontSize: 13 }}>

@@ -29,7 +29,11 @@ export default async function AccountDashboardPage({ params }: { params: Promise
   // "This year" is the newest year present in the data, not the wall-clock year:
   // the statements can be months behind, and an empty box would be the result.
   const latestYear = years.length ? years[years.length - 1] : null;
-  const thisYearMonths = latestYear ? months.filter((m) => m.period.startsWith(latestYear.year)) : [];
+  // The year's chart starts at LAST year's closing value, so "2026 so far" is
+  // measured from where 2025 ended rather than from January's own close.
+  const yearMonths = latestYear ? months.filter((m) => m.period.startsWith(latestYear.year)) : [];
+  const firstIdx = yearMonths.length ? months.indexOf(yearMonths[0]) : -1;
+  const thisYearMonths = firstIdx > 0 ? [months[firstIdx - 1], ...yearMonths] : yearMonths;
 
   const newest = months.length ? months[months.length - 1] : null;
   const asAt = newest

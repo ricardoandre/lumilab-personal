@@ -16,6 +16,9 @@ export interface MonthRow {
   tax: number;               // withholding, negative
   rewards: number;           // broker promotional credits
   fees: number;
+  /** True when the statement's printed closing balance contradicted its own
+   *  transactions and the ledger figure was used instead. */
+  cashCorrected: boolean;
   gain: number;              // value change that is NOT explained by contributions
   returnPct: number | null;  // Modified Dietz, day-weighted
 }
@@ -77,6 +80,10 @@ export async function monthlySeries(db: Db, accountId: bigint): Promise<MonthRow
 
   const rows: MonthRow[] = [];
   let prevValue: number | null = null;
+  let prevCash: number | null = null;
+  /** Previous month's PRINTED closing balance — the comparison must never use a
+   *  corrected value, or one repair propagates into every month after it. */
+  let prevStatedClose: number | null = null;
 
   for (const imp of imports) {
     const end: Date = imp.periodEnd;
@@ -84,7 +91,28 @@ export async function monthlySeries(db: Db, accountId: bigint): Promise<MonthRow
     const monthStart = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
     const days = end.getUTCDate();
 
-    const cash = num(imp.endingBalance);
+    // The broker's closing balance is authoritative, with ONE narrow exception.
+    //
+    // Alpaca's January 2022 statements are broken on both accounts: they print
+    // an opening balance of "$ --" and a closing balance that ignores everything
+    // carried in. Taken at face value that fabricated a -33.67% month for Lisa
+    // and a +16.51% rebound after it, neither of which happened.
+    //
+    // The test is deliberately narrow — an opening balance of ZERO when the
+    // previous month closed with money — and the comparison always uses the
+    // PRINTED figures, never a previously corrected one. A first attempt
+    // compared against the corrected running total instead, so one repair made
+    // the next month disagree as well and the correction cascaded through 36
+    // months, taking Lisa's reported return to an absurd 97.9%.
+    const statedCash = num(imp.endingBalance);
+    const statedOpen = num(imp.beginningBalance);
+    const monthTx = txs.filter((t: any) => t.tradeDate >= monthStart && t.tradeDate <= end);
+    const statementBroken: boolean =
+      prevStatedClose !== null && Math.abs(statedOpen) < 0.005 && Math.abs(prevStatedClose) > 1;
+    const cash: number = statementBroken
+      ? r2((prevCash ?? 0) + monthTx.reduce((a: number, t: any) => a + num(t.netAmount), 0))
+      : statedCash;
+    const cashCorrected = statementBroken;
     const holdingsValue = r2(imp.holdings.reduce((a: number, h: any) => a + num(h.marketValue), 0));
     const portfolioValue = r2(cash + holdingsValue);
 
@@ -121,8 +149,10 @@ export async function monthlySeries(db: Db, accountId: bigint): Promise<MonthRow
       if (Math.abs(denom) > 0.01) returnPct = r4((portfolioValue - start - contributions) / denom);
     }
 
-    rows.push({ period, periodEnd: end.toISOString().slice(0, 10), cash, holdingsValue, portfolioValue, contributions, income, dividends, tax, rewards, fees, gain, returnPct });
+    rows.push({ period, periodEnd: end.toISOString().slice(0, 10), cash, holdingsValue, portfolioValue, contributions, income, dividends, tax, rewards, fees, gain, returnPct, cashCorrected });
     prevValue = portfolioValue;
+    prevCash = cash;
+    prevStatedClose = statedCash;
   }
   return rows;
 }
@@ -323,10 +353,24 @@ export interface Overview {
   /** Everything earned that is not income — i.e. the holdings going up. */
   priceGrowth: number;
   gain: number;
+  /**
+   * TIME-WEIGHTED total return: how the investments performed, ignoring when
+   * money arrived.
+   */
   sinceInception: number | null;
+  /**
+   * SIMPLE return: (value - money in) / money in. This is the number Gotrade's
+   * own app shows, and the one that answers "how much more do I have than I put
+   * in". It is much lower than the time-weighted figure whenever most of the
+   * money arrived recently — those contributions have not had time to grow, but
+   * they are fully counted in the denominator.
+   */
+  simpleReturn: number | null;
   annualised: number | null;
   benchAnnualised: number | null;
   months: number;
+  /** First month with money in the account — for "invested since". */
+  investedSince: string | null;
   firstPeriod: string | null;
   lastPeriod: string | null;
   /** What the idle cash cost, valued at the benchmark's return over the same months. */
@@ -366,9 +410,14 @@ export function overviewFrom(months: MonthRow[], bench: Map<string, number>): Ov
     priceGrowth: r2(gain - income),
     gain,
     sinceInception: chain(rs),
+    simpleReturn: (() => {
+      const paid = r2(months.reduce((a, m) => a + m.contributions, 0));
+      return paid > 0 ? r4(gain / paid) : null;
+    })(),
     annualised: annualise(rs),
     benchAnnualised: annualise(bs),
     months: months.length,
+    investedSince: months.find((m) => m.contributions !== 0)?.period ?? months[0].period,
     firstPeriod: months[0].period,
     lastPeriod: latest.period,
     cashDragUsd: dragKnown ? r2(drag) : null,
