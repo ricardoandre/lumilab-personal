@@ -66,7 +66,16 @@ export async function importStatement(
   const { accountId, fileName, buffer, text } = opts;
   const checksum = sha256(buffer);
 
-  const already = await db.statementImport.findFirst({ where: { accountId, fileChecksum: checksum } });
+  // Only a SUCCESSFUL earlier import makes this a duplicate.
+  //
+  // A failed one must not block a retry: September 2025 failed, its record kept
+  // the checksum, and re-uploading the very same file was waved away as
+  // "already imported" — so the fix could never be tested and, because this
+  // check runs before storage, the file was not even kept the second time.
+  // A refused statement is precisely the one most likely to be uploaded again.
+  const already = await db.statementImport.findFirst({
+    where: { accountId, fileChecksum: checksum, status: 'ok' },
+  });
   if (already) {
     return {
       importId: String(already.id), status: 'duplicate', periodLabel: null,
@@ -74,6 +83,10 @@ export async function importStatement(
       rowsInserted: 0, rowsSkipped: already.rowsParsed, holdings: 0,
     };
   }
+
+  // Clear any previous FAILED attempt at this same file, so the retry can write
+  // its own record (fileChecksum is unique per account).
+  await db.statementImport.deleteMany({ where: { accountId, fileChecksum: checksum, status: { not: 'ok' } } });
 
   // Keep the ORIGINAL file, always — not only on success.
   // September 2025 failed reconciliation by $0.18 and could not be investigated,
