@@ -8,6 +8,11 @@ export const dynamic = 'force-dynamic';
 export default async function AccountsPage() {
   await requireUser();
 
+  const providerOptions = await prisma.fieldOption.findMany({
+    where: { fieldKey: 'account.provider', isActive: true },
+    orderBy: { sortOrder: 'asc' },
+  });
+
   const accounts = await prisma.account.findMany({
     where: { isActive: true },
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
@@ -26,5 +31,5 @@ export default async function AccountsPage() {
     transactions: a._count.transactions,
   }));
 
-  return <AccountsTable rows={rows} />;
+  return <AccountsTable rows={rows} providers={providerOptions.map((o) => ({ value: o.value, label: o.label }))} />;
 }

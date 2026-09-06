@@ -11,7 +11,10 @@ export interface MonthRow {
   holdingsValue: number;
   portfolioValue: number;
   contributions: number;     // deposits - withdrawals (external money only)
-  income: number;            // dividends net of withholding tax
+  income: number;            // dividends net of tax, plus broker rewards
+  dividends: number;         // gross dividends
+  tax: number;               // withholding, negative
+  rewards: number;           // broker promotional credits
   fees: number;
   gain: number;              // value change that is NOT explained by contributions
   returnPct: number | null;  // Modified Dietz, day-weighted
@@ -86,13 +89,23 @@ export async function monthlySeries(db: Db, accountId: bigint): Promise<MonthRow
     const portfolioValue = r2(cash + holdingsValue);
 
     const inMonth = txs.filter((t: any) => t.tradeDate >= monthStart && t.tradeDate <= end);
-    const flows = inMonth.filter((t: any) => ['DEPOSIT', 'WITHDRAWAL', 'JOURNAL'].includes(t.type));
+    // JOURNAL is NOT a contribution. Those rows are Gotrade's own promotional
+    // credits — "Campaign reward Highvaluedeposit July $80.00" — money the
+    // broker gave, not money Andre paid in. Counting them as contributions
+    // claimed he had funded $84 he never funded, and suppressed the return his
+    // actual capital earned. They belong with income.
+    const flows = inMonth.filter((t: any) => ['DEPOSIT', 'WITHDRAWAL'].includes(t.type));
     const contributions = r2(flows.reduce((a: number, t: any) => a + num(t.netAmount), 0));
     const income = r2(
-      inMonth.filter((t: any) => ['DIVIDEND', 'INTEREST', 'TAX'].includes(t.type))
+      inMonth.filter((t: any) => ['DIVIDEND', 'INTEREST', 'TAX', 'JOURNAL'].includes(t.type))
         .reduce((a: number, t: any) => a + num(t.netAmount), 0),
     );
-    const fees = r2(inMonth.filter((t: any) => t.type === 'FEE').reduce((a: number, t: any) => a + num(t.netAmount), 0));
+    const sumOf = (types: string[]) =>
+      r2(inMonth.filter((t: any) => types.includes(t.type)).reduce((a: number, t: any) => a + num(t.netAmount), 0));
+    const dividends = sumOf(['DIVIDEND']);
+    const tax = sumOf(['TAX']);
+    const rewards = sumOf(['JOURNAL']);
+    const fees = sumOf(['FEE']);
 
     const start = prevValue;
     const gain = start === null ? 0 : r2(portfolioValue - start - contributions);
@@ -108,7 +121,7 @@ export async function monthlySeries(db: Db, accountId: bigint): Promise<MonthRow
       if (Math.abs(denom) > 0.01) returnPct = r4((portfolioValue - start - contributions) / denom);
     }
 
-    rows.push({ period, periodEnd: end.toISOString().slice(0, 10), cash, holdingsValue, portfolioValue, contributions, income, fees, gain, returnPct });
+    rows.push({ period, periodEnd: end.toISOString().slice(0, 10), cash, holdingsValue, portfolioValue, contributions, income, dividends, tax, rewards, fees, gain, returnPct });
     prevValue = portfolioValue;
   }
   return rows;
@@ -304,6 +317,11 @@ export interface Overview {
   cashPct: number;
   contributions: number;
   income: number;
+  dividends: number;
+  tax: number;
+  rewards: number;
+  /** Everything earned that is not income — i.e. the holdings going up. */
+  priceGrowth: number;
   gain: number;
   sinceInception: number | null;
   annualised: number | null;
@@ -332,14 +350,21 @@ export function overviewFrom(months: MonthRow[], bench: Map<string, number>): Ov
     dragKnown = true;
   }
 
+  const income = r2(months.reduce((a, m) => a + m.income, 0));
+  const gain = r2(months.reduce((a, m) => a + m.gain, 0));
+
   return {
     latestValue: latest.portfolioValue,
     cash: latest.cash,
     holdingsValue: latest.holdingsValue,
     cashPct: latest.portfolioValue > 0 ? r4(latest.cash / latest.portfolioValue) : 0,
     contributions: r2(months.reduce((a, m) => a + m.contributions, 0)),
-    income: r2(months.reduce((a, m) => a + m.income, 0)),
-    gain: r2(months.reduce((a, m) => a + m.gain, 0)),
+    income,
+    dividends: r2(months.reduce((a, m) => a + m.dividends, 0)),
+    tax: r2(months.reduce((a, m) => a + m.tax, 0)),
+    rewards: r2(months.reduce((a, m) => a + m.rewards, 0)),
+    priceGrowth: r2(gain - income),
+    gain,
     sinceInception: chain(rs),
     annualised: annualise(rs),
     benchAnnualised: annualise(bs),

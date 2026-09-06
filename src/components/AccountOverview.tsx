@@ -2,31 +2,34 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Card, Typography, Space, Row, Col, Statistic, Tag, Alert, Grid, Button } from 'antd';
+import { Card, Typography, Space, Row, Col, Tag, Alert, Grid, Button } from 'antd';
 import type { MonthRow, YearVsBench, Overview, StockRow } from '@/lib/gotrade/report';
 import { ResponsiveRows } from './ResponsiveRows';
 import { StatementUploadButton } from './StatementUploadButton';
 import { PortfolioChart } from './PortfolioChart';
+import { StatCard, BreakdownLine, BreakdownNote, BreakdownStack } from './StatCard';
 import { usd, usd0, Pct, Money } from './money';
 
 const YEARS_SHOWN = 3;
+const GREEN = '#237804';
+const RED = '#a8071a';
 
 export function AccountOverview({
-  accountId, accountName, overview, years, months, stocks, provider, currency, accountNo, latestStatement,
+  accountId, accountName, overview, years, months, stocks, provider, currency, accountNo, asAt,
 }: {
   accountId: string; accountName: string; provider: string; currency: string; accountNo: string | null;
   overview: Overview | null; years: YearVsBench[]; months: MonthRow[]; stocks: StockRow[];
-  latestStatement: { period: string; fileName: string; importedAt: string; total: number } | null;
+  asAt: { period: string; monthsBehind: number } | null;
 }) {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.lg;
+  const size = isMobile ? ('small' as const) : ('default' as const);
   const [showAllYears, setShowAllYears] = useState(false);
 
-  // Newest first — the year you care about is this one, not 2021.
   const orderedYears = [...years].reverse();
   const visibleYears = showAllYears ? orderedYears : orderedYears.slice(0, YEARS_SHOWN);
 
-  const size = isMobile ? ('small' as const) : ('default' as const);
+  const pct = (v: number | null) => (v === null ? '—' : `${v >= 0 ? '+' : ''}${(v * 100).toFixed(2)}%`);
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -46,55 +49,94 @@ export function AccountOverview({
           description="Upload your monthly statements and the reports will build themselves." />
       ) : (
         <>
-          {latestStatement && (
+          {/* Quiet when current, loud when not. A number four months stale looks
+              exactly like a fresh one unless something says otherwise. */}
+          {asAt && asAt.monthsBehind >= 2 ? (
             <Alert
-              type="info"
+              type="warning"
               showIcon
-              message={`Figures are as at ${latestStatement.period} — the latest statement uploaded`}
-              description={
-                <span style={{ fontSize: 13 }}>
-                  {latestStatement.fileName} · imported {latestStatement.importedAt} · {latestStatement.total} statements in total.
-                  Anything after {latestStatement.period} is not in here yet.
-                </span>
-              }
+              message={`Last statement: ${asAt.period} — about ${asAt.monthsBehind} months out of date`}
+              description="Upload your newer statements to bring these figures up to date."
             />
-          )}
+          ) : asAt ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13 }}>As at {asAt.period}</Typography.Text>
+          ) : null}
 
           <Row gutter={[12, 12]}>
-            <Col xs={12} lg={6}><Card size={size}>
-              <Statistic title="Portfolio value" value={usd(overview.latestValue)} />
-            </Card></Col>
-            <Col xs={12} lg={6}><Card size={size}>
-              <Statistic title="Total return"
-                value={overview.sinceInception === null ? '—' : `${overview.sinceInception >= 0 ? '+' : ''}${(overview.sinceInception * 100).toFixed(2)}%`}
-                valueStyle={{ color: (overview.sinceInception ?? 0) >= 0 ? '#237804' : '#a8071a' }} />
-            </Card></Col>
-            <Col xs={12} lg={6}><Card size={size}>
-              <Statistic title="Return a year"
-                value={overview.annualised === null ? '—' : `${overview.annualised >= 0 ? '+' : ''}${(overview.annualised * 100).toFixed(2)}%`}
-                valueStyle={{ color: (overview.annualised ?? 0) >= 0 ? '#237804' : '#a8071a' }} />
-            </Card></Col>
-            <Col xs={12} lg={6}><Card size={size}>
-              <Statistic title="Investment earned" value={usd0(overview.gain)}
-                valueStyle={{ color: overview.gain >= 0 ? '#237804' : '#a8071a' }} />
-            </Card></Col>
+            <Col xs={12} lg={6}>
+              <StatCard
+                small={isMobile}
+                title="Portfolio value"
+                value={usd(overview.latestValue)}
+                drawerTitle="What makes up the value"
+                breakdown={
+                  <BreakdownStack>
+                    {stocks.map((s) => (
+                      <BreakdownLine key={s.symbol} label={s.symbol} note={s.name ?? undefined}
+                        value={<Money v={s.marketValue} />} />
+                    ))}
+                    <BreakdownLine label="Cash" note="uninvested" value={<Money v={overview.cash} />} divider />
+                    <BreakdownLine label="Total" value={<Money v={overview.latestValue} />} strong divider />
+                    <BreakdownNote>
+                      Share prices are those printed on your latest statement — the only price
+                      source there is, since Gotrade has no API.
+                    </BreakdownNote>
+                  </BreakdownStack>
+                }
+              />
+            </Col>
+
+            <Col xs={12} lg={6}>
+              <StatCard
+                small={isMobile}
+                title="Total return"
+                value={pct(overview.sinceInception)}
+                valueColor={(overview.sinceInception ?? 0) >= 0 ? GREEN : RED}
+                drawerTitle="Where the return came from"
+                breakdown={
+                  <BreakdownStack>
+                    <BreakdownLine label="Share price growth" value={<Money v={overview.priceGrowth} />} />
+                    <BreakdownLine label="Dividends received" value={<Money v={overview.dividends} />} />
+                    <BreakdownLine label="Withholding tax" note="15% US tax on dividends"
+                      value={<Money v={overview.tax} />} />
+                    <BreakdownLine label="Gotrade rewards" note="promotional credits"
+                      value={<Money v={overview.rewards} />} />
+                    <BreakdownLine label="Total earned" value={<Money v={overview.gain} />} strong divider />
+
+                    <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>By stock</div>
+                    {stocks.map((s) => (
+                      <BreakdownLine
+                        key={s.symbol}
+                        label={s.symbol}
+                        note={`${usd(s.unrealized)} price${s.dividends ? ` + ${usd(s.dividends)} dividends` : ''}`}
+                        value={<Pct v={s.returnPct} />}
+                      />
+                    ))}
+                    <BreakdownNote>
+                      Return is time-weighted, so money you paid in is never counted as a gain.
+                      Dividends are shown gross with the tax listed separately — what reached your
+                      account is the two combined.
+                    </BreakdownNote>
+                  </BreakdownStack>
+                }
+              />
+            </Col>
+
+            <Col xs={12} lg={6}>
+              <StatCard small={isMobile} title="Return a year" value={pct(overview.annualised)}
+                valueColor={(overview.annualised ?? 0) >= 0 ? GREEN : RED} />
+            </Col>
+            <Col xs={12} lg={6}>
+              <StatCard small={isMobile} title="Investment earned" value={usd0(overview.gain)}
+                valueColor={overview.gain >= 0 ? GREEN : RED} />
+            </Col>
           </Row>
 
           <Card size={size}>
-            <Space direction="vertical" size={2} style={{ width: '100%' }}>
-              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                You paid in <strong>{usd0(overview.contributions)}</strong>; it is now worth{' '}
-                <strong>{usd0(overview.latestValue)}</strong>.
-              </Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                Of the {usd0(overview.gain)} earned, <strong>{usd(overview.income)}</strong> is dividends
-                (after tax) and the rest is price growth.
-              </Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                Against just buying SPY: you <Pct v={overview.annualised} /> a year, SPY{' '}
-                <Pct v={overview.benchAnnualised} /> a year.
-              </Typography.Text>
-            </Space>
+            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+              Against just buying SPY: you <Pct v={overview.annualised} /> a year, SPY{' '}
+              <Pct v={overview.benchAnnualised} /> a year.
+            </Typography.Text>
           </Card>
 
           <Card title="Your stocks now" styles={{ body: { padding: 0 } }} size={size}
@@ -104,7 +146,7 @@ export function AccountOverview({
               fields={[
                 { key: 'sym', label: 'Symbol', primary: true, render: (r) => <Tag style={{ marginInlineEnd: 0 }}>{r.symbol}</Tag> },
                 { key: 'val', label: 'Portfolio value', render: (r) => <Money v={r.marketValue} /> },
-                { key: 'eq', label: 'Equity (your cost)', render: (r) => <Money v={r.costBasis} /> },
+                { key: 'eq', label: 'Money in', render: (r) => <Money v={r.costBasis} /> },
                 { key: 'ret', label: 'Return', render: (r) => <Pct v={r.returnPct} bold /> },
                 { key: 'ann', label: 'Return a year', render: (r) => <Pct v={r.annualisedPct} /> },
               ]}

@@ -12,7 +12,11 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3004';
-const EMAIL = process.env.CHECK_EMAIL || 'ricardo.4ndre@gmail.com';
+// Credentials come from the environment. They were hardcoded to Andre's, and
+// when he changed his own password every screen reported FAIL — the app was
+// fine, the check was stale. A failed sign-in now says so explicitly instead of
+// cascading into twenty misleading failures.
+const EMAIL = process.env.CHECK_EMAIL || 'lisa.kumala.iskandar@gmail.com';
 const PASSWORD = process.env.CHECK_PASSWORD || 'Password1234';
 const CHROME = process.env.CHROME_PATH
   || '/home/claudeuser/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome';
@@ -103,8 +107,14 @@ await evaluate(`(() => {
   document.querySelector('button[type=submit]').click();
 })()`);
 await sleep(5000);
-report('signed in (left /login)', !(await evaluate(`location.pathname`)).startsWith('/login'),
-  `now at ${await evaluate('location.pathname')}`);
+const signedIn = !(await evaluate(`location.pathname`)).startsWith('/login');
+report('signed in (left /login)', signedIn, signedIn ? '' : `credentials rejected for ${EMAIL} — set CHECK_EMAIL / CHECK_PASSWORD`);
+if (!signedIn) {
+  console.log('\n  Sign-in failed, so every screen below would fail for that reason alone. Stopping.');
+  ws.close(); chrome.kill();
+  console.log('\nRESULT: FAIL');
+  process.exit(1);
+}
 
 // 2. the screens
 for (const [name, path, expect] of [

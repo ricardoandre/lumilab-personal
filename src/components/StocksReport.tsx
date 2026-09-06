@@ -6,31 +6,39 @@ import type { StockRow } from '@/lib/gotrade/report';
 import { ResponsiveRows } from './ResponsiveRows';
 import { Pct, Money } from './money';
 
-type SortKey = 'Return' | 'Money in' | 'Dividends';
+type SortKey = 'Return a year' | 'Total return' | 'Portfolio value' | 'Money in' | 'Dividends';
+
+// Sorting always puts the biggest first, and a missing value sorts LAST rather
+// than as zero — a stock too new to annualise is unknown, not worst.
+const SORTS: Record<SortKey, (a: StockRow, b: StockRow) => number> = {
+  'Return a year': (a, b) => (b.annualisedPct ?? -Infinity) - (a.annualisedPct ?? -Infinity),
+  'Total return': (a, b) => (b.returnPct ?? -Infinity) - (a.returnPct ?? -Infinity),
+  'Portfolio value': (a, b) => b.marketValue - a.marketValue,
+  'Money in': (a, b) => b.costBasis - a.costBasis,
+  Dividends: (a, b) => b.dividends - a.dividends,
+};
 
 export function StocksReport({ stocks }: { stocks: StockRow[] }) {
   const screens = Grid.useBreakpoint();
-  const [sort, setSort] = useState<SortKey>('Return');
+  const [sort, setSort] = useState<SortKey>('Return a year');
 
-  const rows = useMemo(() => {
-    const copy = [...stocks];
-    copy.sort((a, b) => {
-      if (sort === 'Return') return (b.returnPct ?? -Infinity) - (a.returnPct ?? -Infinity);
-      if (sort === 'Money in') return b.costBasis - a.costBasis;
-      return b.dividends - a.dividends;
-    });
-    return copy.map((s) => ({ ...s, key: s.symbol }));
-  }, [stocks, sort]);
+  const rows = useMemo(
+    () => [...stocks].sort(SORTS[sort]).map((s) => ({ ...s, key: s.symbol })),
+    [stocks, sort],
+  );
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Segmented
-        block={!screens.sm}
-        size={screens.lg ? 'middle' : 'small'}
-        options={['Return', 'Money in', 'Dividends'] as SortKey[]}
-        value={sort}
-        onChange={(v) => setSort(v as SortKey)}
-      />
+      {/* Five options do not fit a phone as a segmented strip, so it scrolls
+          horizontally inside its own container rather than widening the page. */}
+      <div style={{ overflowX: 'auto', paddingBottom: 2 }}>
+        <Segmented
+          size={screens.lg ? 'middle' : 'small'}
+          options={Object.keys(SORTS) as SortKey[]}
+          value={sort}
+          onChange={(v) => setSort(v as SortKey)}
+        />
+      </div>
       <Card styles={{ body: { padding: 0 } }} size={screens.lg ? 'default' : 'small'}>
         <ResponsiveRows<StockRow & { key: string }>
           rows={rows}

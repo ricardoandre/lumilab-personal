@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { parseStatement, reconcile, type ParsedTx } from './parse-statement.ts';
+import { put, statementKey } from '../storage.ts';
 
 /** Minimal shape we need from the app's Prisma client. */
 type Db = any;
@@ -74,12 +75,47 @@ export async function importStatement(
     };
   }
 
+  // Keep the ORIGINAL file, always — not only on success.
+  // September 2025 failed reconciliation by $0.18 and could not be investigated,
+  // because the upload existed only for the length of the request. A parser this
+  // strict WILL refuse statements, and every refusal is a bug report that is
+  // useless without the document that caused it. Storing it also means a parser
+  // fix can be re-run over past uploads instead of asking for them again.
+  let storageKey: string | null = null;
+  try {
+    storageKey = await put(statementKey(accountId, checksum), buffer);
+  } catch {
+    // Storage must never block an import: a full disk should cost us the audit
+    // copy, not the data.
+    storageKey = null;
+  }
+
   const parsed = parseStatement(text);
   const recon = reconcile(parsed);
   const failed = recon.checks.filter((c) => !c.ok);
   const note = failed.length
     ? failed.map((c) => `${c.name}: expected ${c.expected}, got ${c.actual}`).join('; ')
     : recon.notes.join('; ') || null;
+
+  // WHOSE statement is this? Every Gotrade statement prints its account number.
+  // With more than one Gotrade account, uploading Andre's December into Lisa's
+  // account would otherwise succeed silently and corrupt both — her balances
+  // would include his trades, and nothing on screen would say so.
+  //
+  // First upload CLAIMS the number for an account that has none; after that a
+  // mismatch is refused outright.
+  const account = await db.account.findUnique({ where: { id: accountId } });
+  if (parsed.accountNo) {
+    if (!account?.externalAccountNo) {
+      await db.account.update({ where: { id: accountId }, data: { externalAccountNo: parsed.accountNo } });
+    } else if (account.externalAccountNo !== parsed.accountNo) {
+      return {
+        importId: '', status: 'failed', periodLabel: parsed.periodLabel, reconciled: false,
+        rowsParsed: 0, rowsInserted: 0, rowsSkipped: 0, holdings: 0,
+        error: `This statement is for account ${parsed.accountNo}, but ${account.name} is account ${account.externalAccountNo}. Nothing was imported.`,
+      };
+    }
+  }
 
   const imp = await db.statementImport.create({
     data: {
@@ -98,6 +134,7 @@ export async function importStatement(
       endingBalance: parsed.cash.ending,
       reconciled: recon.ok,
       reconcileNote: note,
+      storageKey,
       status: recon.ok ? 'ok' : 'failed',
     },
   });

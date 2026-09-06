@@ -213,8 +213,14 @@ export function parseStatement(text: string): ParsedStatement {
   // ── Transaction: the trades ──
   for (const row of logicalRows(section(text, 'Transaction', ['Deposit & Withdrawals', 'STATEMENT MESSAGE', 'DISCLOSURES']))) {
     // <date> Trade Entry <side> <symbol> <qty> $<price> <amount> <commission>
+    // Quantity may be NEGATIVE: Alpaca writes a sale as
+    //   "Trade Entry sell SPY -2 $412.43 $824.86"
+    // — negative shares, positive proceeds. Without the sign the row did not
+    // match at all, so sells were silently dropped and the month's trade total
+    // came out short. It went unnoticed because the first account imported had
+    // 23 buys and no sells; the second account failed on five statements.
     const m = row.match(
-      /^(\d{1,2}\/\d{1,2}\/\d{4})\s+Trade Entry\s+(buy|sell)\s+([A-Z]{1,5}(?:\.[A-Z])?)\s+([\d.]+)\s+\$([\d,.]+)\s+(-?\$?[\d,.]+)\s*(\$ ?--|-?\$?[\d,.]+)?/i,
+      /^(\d{1,2}\/\d{1,2}\/\d{4})\s+Trade Entry\s+(buy|sell)\s+([A-Z]{1,5}(?:\.[A-Z])?)\s+(-?[\d.]+)\s+\$([\d,.]+)\s+(-?\$?[\d,.]+)\s*(\$ ?--|-?\$?[\d,.]+)?/i,
     );
     if (!m) continue;
     const [, date, side, symbol, qty, price, amt, comm] = m;
@@ -224,7 +230,9 @@ export function parseStatement(text: string): ParsedStatement {
       entryType: 'Trade Entry',
       symbol,
       description: null,
-      quantity: parseFloat(qty),
+      // Stored positive; the TYPE carries the direction, and netAmount carries
+      // the sign (negative when buying, positive when selling).
+      quantity: Math.abs(parseFloat(qty)),
       price: money(price),
       amount: money(amt)!,
       commission: comm ? money(comm) : null,
