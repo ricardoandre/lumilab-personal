@@ -35,6 +35,17 @@ const nextConfig: NextConfig = {
   // other, so a failed build can never corrupt the running site.
   distDir: process.env.NEXT_DIST_DIR || '.next',
 
+  // pdf-parse pulls in pdfjs, which loads a SEPARATE worker file at runtime.
+  // Bundling rewrites that import to a chunk path which is never emitted, so
+  // every statement upload failed with
+  //   Cannot find module '.next/server/chunks/pdf.worker.mjs'
+  // while passing under plain `node`, where nothing is bundled. Leaving these
+  // external keeps them resolving out of node_modules the way pdfjs expects.
+  // kanoapp learned this on 2026-08-26 — it broke 95 orders in one cron run and
+  // captured zero — and this app reproduced it exactly by copying that config
+  // without this line.
+  serverExternalPackages: ['pdf-parse', 'pdfjs-dist'],
+
   // Same memory mitigation kanoapp uses — this droplet runs several Node apps
   // and swap is chronically busy. Trades compile time for lower peak memory.
   experimental: { webpackMemoryOptimizations: true },

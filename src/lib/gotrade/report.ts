@@ -37,6 +37,13 @@ export interface StockRow {
   dividends: number;
   totalReturn: number;
   returnPct: number | null;
+  /** First purchase — the start of the holding period. */
+  heldSince: string | null;
+  heldYears: number | null;
+  /** Total return spread over the holding period, so a 3-month and a 4-year
+   *  position can be compared at all. Null under ~3 months: annualising a few
+   *  weeks produces confident nonsense. */
+  annualisedPct: number | null;
 }
 
 /**
@@ -159,18 +166,186 @@ export async function stockReport(db: Db, accountId: bigint): Promise<StockRow[]
     divs.map((d: any) => [String(d.securityId), num(d._sum.netAmount)]),
   );
 
+  // First BUY per security = when the holding period started.
+  const firstBuys = await db.transaction.groupBy({
+    by: ['securityId'],
+    where: { accountId, type: 'BUY' },
+    _min: { tradeDate: true },
+  });
+  const firstBySec = new Map<string, Date>(
+    firstBuys.filter((f: any) => f.securityId && f._min.tradeDate)
+      .map((f: any) => [String(f.securityId), f._min.tradeDate as Date]),
+  );
+  const asOf: Date = latest.periodEnd;
+
   return latest.holdings.map((h: any) => {
     const costBasis = num(h.costBasis);
     const marketValue = num(h.marketValue);
     const unrealized = num(h.unrealized);
     const dividends = r2(divBySec.get(String(h.securityId)) ?? 0);
     const totalReturn = r2(unrealized + dividends);
+    const first = firstBySec.get(String(h.securityId)) ?? null;
+    const years = first ? (asOf.getTime() - first.getTime()) / (365.25 * 24 * 3600 * 1000) : null;
+    const simple = costBasis > 0 ? r4(totalReturn / costBasis) : null;
     return {
       symbol: h.security.symbol,
       name: h.security.name,
       quantity: Number(h.quantity),
       costBasis, marketValue, unrealized, dividends, totalReturn,
-      returnPct: costBasis > 0 ? r4(totalReturn / costBasis) : null,
+      returnPct: simple,
+      heldSince: first ? first.toISOString().slice(0, 10) : null,
+      heldYears: years === null ? null : r2(years),
+      annualisedPct:
+        simple !== null && years !== null && years >= 0.25
+          ? r4(Math.pow(1 + simple, 1 / years) - 1)
+          : null,
     };
   }).sort((a: StockRow, b: StockRow) => b.marketValue - a.marketValue);
+}
+
+// ─────────────────────────── benchmark & annualisation ───────────────────────
+
+export interface BenchRow {
+  period: string;
+  portfolioPct: number | null;
+  benchmarkPct: number | null;
+}
+
+export interface YearVsBench extends YearRow {
+  benchmarkPct: number | null;
+  vsBenchmark: number | null;
+}
+
+/**
+ * SPY TOTAL return, month by month, from data already in the statements.
+ *
+ * Total, not price-only, and the distinction is not cosmetic: SPY yields ~1.3%
+ * a year, so comparing the portfolio's total return against SPY's price return
+ * would flatter the portfolio by roughly that much every year, compounding.
+ *
+ * The dividend per share comes from the statement text itself — Alpaca prints
+ * "Cash DIV @ 1.906073, Pos QTY: 14" — so no external price feed is needed,
+ * which matters because this broker has no API.
+ */
+export async function benchmarkMonthly(db: Db, accountId: bigint, symbol = 'SPY'): Promise<Map<string, number>> {
+  const sec = await db.security.findFirst({ where: { symbol } });
+  if (!sec) return new Map();
+
+  const holdings = await db.statementHolding.findMany({
+    where: { securityId: sec.id, import: { accountId, status: 'ok' } },
+    orderBy: { asOf: 'asc' },
+    select: { asOf: true, marketPrice: true },
+  });
+
+  const divTx = await db.transaction.findMany({
+    where: { accountId, securityId: sec.id, type: 'DIVIDEND' },
+    select: { tradeDate: true, description: true },
+  });
+  const divPerShare = new Map<string, number>();
+  for (const t of divTx) {
+    const m = String(t.description ?? '').match(/Cash DIV @ ([\d.]+)/);
+    if (!m) continue;
+    const key = t.tradeDate.toISOString().slice(0, 7);
+    divPerShare.set(key, (divPerShare.get(key) ?? 0) + parseFloat(m[1]));
+  }
+
+  const out = new Map<string, number>();
+  let prev: number | null = null;
+  for (const h of holdings) {
+    const period = h.asOf.toISOString().slice(0, 7);
+    const price = num(h.marketPrice);
+    if (price <= 0) { prev = prev; continue; }
+    if (prev !== null && prev > 0) {
+      out.set(period, r4((price + (divPerShare.get(period) ?? 0) - prev) / prev));
+    }
+    prev = price;
+  }
+  return out;
+}
+
+/** Chain monthly returns, then express per year. n months of r -> (1+r)^(12/n) - 1. */
+export function annualise(monthlyReturns: (number | null)[]): number | null {
+  const rs = monthlyReturns.filter((r): r is number => r !== null);
+  if (!rs.length) return null;
+  const total = rs.reduce((acc, r) => acc * (1 + r), 1);
+  return r4(Math.pow(total, 12 / rs.length) - 1);
+}
+
+export function chain(monthlyReturns: (number | null)[]): number | null {
+  const rs = monthlyReturns.filter((r): r is number => r !== null);
+  if (!rs.length) return null;
+  return r4(rs.reduce((acc, r) => acc * (1 + r), 1) - 1);
+}
+
+/**
+ * Yearly table with the benchmark beside it.
+ *
+ * A part-year is annualised so the column means the same thing in every row:
+ * 2021 covers nine months, and printing its raw nine-month figure next to four
+ * full years invites exactly the wrong comparison.
+ */
+export function yearlyVsBenchmark(months: MonthRow[], bench: Map<string, number>): YearVsBench[] {
+  const years = yearlyFromMonths(months);
+  return years.map((y) => {
+    const ms = months.filter((m) => m.period.startsWith(y.year));
+    const b = chain(ms.map((m) => bench.get(m.period) ?? null));
+    return {
+      ...y,
+      benchmarkPct: b,
+      vsBenchmark: y.returnPct !== null && b !== null ? r4(y.returnPct - b) : null,
+    };
+  });
+}
+
+export interface Overview {
+  latestValue: number;
+  cash: number;
+  holdingsValue: number;
+  cashPct: number;
+  contributions: number;
+  income: number;
+  gain: number;
+  sinceInception: number | null;
+  annualised: number | null;
+  benchAnnualised: number | null;
+  months: number;
+  firstPeriod: string | null;
+  lastPeriod: string | null;
+  /** What the idle cash cost, valued at the benchmark's return over the same months. */
+  cashDragUsd: number | null;
+}
+
+export function overviewFrom(months: MonthRow[], bench: Map<string, number>): Overview | null {
+  if (!months.length) return null;
+  const latest = months[months.length - 1];
+  const rs = months.map((m) => m.returnPct);
+  const bs = months.map((m) => bench.get(m.period) ?? null);
+
+  // Cash drag: idle cash each month, valued at what the benchmark returned that
+  // month. Deliberately a MEASURE, not advice — a buffer can be worth its cost.
+  let drag = 0;
+  let dragKnown = false;
+  for (const m of months) {
+    const b = bench.get(m.period);
+    if (b === undefined) continue;
+    drag += m.cash * b;
+    dragKnown = true;
+  }
+
+  return {
+    latestValue: latest.portfolioValue,
+    cash: latest.cash,
+    holdingsValue: latest.holdingsValue,
+    cashPct: latest.portfolioValue > 0 ? r4(latest.cash / latest.portfolioValue) : 0,
+    contributions: r2(months.reduce((a, m) => a + m.contributions, 0)),
+    income: r2(months.reduce((a, m) => a + m.income, 0)),
+    gain: r2(months.reduce((a, m) => a + m.gain, 0)),
+    sinceInception: chain(rs),
+    annualised: annualise(rs),
+    benchAnnualised: annualise(bs),
+    months: months.length,
+    firstPeriod: months[0].period,
+    lastPeriod: latest.period,
+    cashDragUsd: dragKnown ? r2(drag) : null,
+  };
 }

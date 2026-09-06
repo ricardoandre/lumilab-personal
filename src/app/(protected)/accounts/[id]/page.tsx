@@ -2,29 +2,33 @@ import { notFound } from 'next/navigation';
 import '@/engine.server';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/require-user';
-import { AccountDetailView, type AccountDetail } from '@/components/AccountDetailView';
+import { monthlySeries, benchmarkMonthly, yearlyVsBenchmark, overviewFrom } from '@/lib/gotrade/report';
+import { AccountOverview } from '@/components/AccountOverview';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AccountDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AccountPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
-
-  // A bad id must 404, not throw: BigInt('abc') is a TypeError, which would be a
-  // 500 on a URL anyone can mistype.
   let accountId: bigint;
   try { accountId = BigInt(id); } catch { notFound(); }
 
-  const a = await prisma.account.findUnique({
-    where: { id: accountId! },
-    include: { provider: true, _count: { select: { transactions: true, imports: true } } },
-  });
+  const a = await prisma.account.findUnique({ where: { id: accountId! }, include: { provider: true } });
   if (!a) notFound();
 
-  const account: AccountDetail = {
-    name: a.name, provider: a.provider.label, color: a.provider.color,
-    kind: a.kind, currency: a.currency, accountNo: a.externalAccountNo,
-    imports: a._count.imports, transactions: a._count.transactions,
-  };
-  return <AccountDetailView account={account} />;
+  const months = await monthlySeries(prisma, accountId!);
+  const bench = await benchmarkMonthly(prisma, accountId!);
+
+  return (
+    <AccountOverview
+      accountId={id}
+      accountName={a.name}
+      provider={a.provider.label}
+      currency={a.currency}
+      accountNo={a.externalAccountNo}
+      overview={overviewFrom(months, bench)}
+      years={yearlyVsBenchmark(months, bench)}
+      months={months}
+    />
+  );
 }

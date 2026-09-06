@@ -110,11 +110,12 @@ report('signed in (left /login)', !(await evaluate(`location.pathname`)).startsW
 for (const [name, path, expect] of [
   ['dashboard', '/', 'Overview'],
   ['accounts', '/accounts', 'Andre Gotrade'],
-  ['account detail', '/accounts/1', 'Andre Gotrade'],
+  ['account overview', '/accounts/1', 'Annualised return'],
   ['my account', '/account', 'Change password'],
   ['users', '/users', 'ricardo.4ndre@gmail.com'],
   ['field options', '/field-options', 'Gotrade'],
   ['gotrade report', '/accounts/1/report', 'Individual stocks'],
+  ['upload present', '/accounts/1', 'Upload statements'],
 ]) {
   await goto(BASE + path);
   const text = await evaluate(`document.body.innerText`);
