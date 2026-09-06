@@ -24,7 +24,8 @@ export function NavAccounts() {
             ? {
                 ...g,
                 entries: [
-                  { label: 'All Accounts', href: '/accounts' },
+                  { label: 'Account list', href: '/accounts' },
+                  { label: 'Projection', href: '/accounts/projection' },
                   // Each account contributes a SUBGROUP: the account itself plus
                   // its tools. Andre: "each gotrade will have set of tools we are
                   // building" — so the tools hang off the account, not off a
@@ -46,7 +47,6 @@ export function NavAccounts() {
                       },
                     ],
                   })),
-                  { label: 'Statement Imports', badge: 'next' as const },
                 ],
               }
             : g,

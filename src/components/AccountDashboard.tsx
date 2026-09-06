@@ -1,13 +1,14 @@
 'use client';
 
 import { Card, Typography, Space, Tag, Alert, Grid } from 'antd';
-import type { MonthRow, Overview, StockRow, StockYearRow, YearVsBench } from '@/lib/gotrade/report';
+import type { MonthRow, Overview, StockRow, StockYearRow, YearVsBench, YearIrr } from '@/lib/gotrade/report';
 import { ResponsiveRows } from './ResponsiveRows';
 import { StatementUploadButton } from './StatementUploadButton';
 import { PortfolioChart } from './PortfolioChart';
 import { AccountStats } from './AccountStats';
 import { DataHealthAlert } from './DataHealthAlert';
 import { YearMetrics } from './YearMetrics';
+import { ConcentrationCard } from './ConcentrationCard';
 import { StockLabel } from './StockIcon';
 import { usd0, Pct, Money } from './money';
 
@@ -16,12 +17,12 @@ const RED = '#a8071a';
 
 export function AccountDashboard({
   accountId, accountName, provider, currency, accountNo,
-  overview, stocks, months, thisYear, thisYearMonths, yearStocks, irr, years, asAt, missing, failed,
+  overview, stocks, months, thisYear, thisYearMonths, yearStocks, irr, irrYears, years, asAt, missing, failed,
 }: {
   accountId: string; accountName: string; provider: string; currency: string; accountNo: string | null;
   overview: Overview | null; stocks: StockRow[]; months: MonthRow[];
   thisYear: YearVsBench | null; thisYearMonths: MonthRow[];
-  yearStocks: StockYearRow[]; irr: number | null; years: YearVsBench[];
+  yearStocks: StockYearRow[]; irr: number | null; irrYears: YearIrr[]; years: YearVsBench[];
   asAt: { period: string; monthsBehind: number } | null;
   missing: string[]; failed: { fileName: string; reason: string }[];
 }) {
@@ -50,7 +51,7 @@ export function AccountDashboard({
           description="Upload your monthly statements and the reports will build themselves." />
       ) : (
         <>
-          <AccountStats overview={overview} stocks={stocks} years={years} irr={irr} />
+          <AccountStats overview={overview} stocks={stocks} years={years} irr={irr} irrYears={irrYears} />
 
           <Card size={size}>
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
@@ -58,6 +59,8 @@ export function AccountDashboard({
               <Pct v={overview.benchAnnualised} /> a year.
             </Typography.Text>
           </Card>
+
+          <ConcentrationCard overview={overview} stocks={stocks} />
 
           <Card size={size}>
             <Space direction="vertical" size={4} style={{ width: '100%' }}>
@@ -90,6 +93,10 @@ export function AccountDashboard({
                   { key: 'start', label: `End ${Number(thisYear.year) - 1}`, render: (r) => <Money v={r.startValue} zeroDim /> },
                   { key: 'bought', label: 'Bought this year', render: (r) => <Money v={r.netTraded} zeroDim /> },
                   { key: 'val', label: 'Value now', render: (r) => <Money v={r.marketValue} /> },
+                  {
+                    key: 'weight', label: 'Share of account',
+                    render: (r) => `${(r.weightPct * 100).toFixed(1)}%`,
+                  },
                 ]}
               />
             </Card>

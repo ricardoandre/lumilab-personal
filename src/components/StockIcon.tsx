@@ -39,13 +39,24 @@ export function StockIcon({ symbol, size = 26 }: { symbol: string; size?: number
 
 /** Icon plus ticker, the standard way a holding is named across the app. */
 export function StockLabel({ symbol, name, size }: { symbol: string; name?: string | null; size?: number }) {
+  // `display: flex` with min-width:0 on BOTH the container and the text block.
+  // A flex item defaults to min-width:auto, which refuses to shrink below its
+  // content — so "TAIWAN SEMICONDUCTOR MANUFACTURING CO LTD SPON ADR" pushed the
+  // whole row wider than the screen instead of ellipsising. maxWidth caps it on
+  // desktop, where there is no other constraint to shrink against.
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+    <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, maxWidth: 260 }}>
       <StockIcon symbol={symbol} size={size} />
-      <span style={{ minWidth: 0 }}>
+      <span style={{ minWidth: 0, overflow: 'hidden' }}>
         <span style={{ fontWeight: 600 }}>{symbol}</span>
         {name && (
-          <span style={{ display: 'block', fontSize: 11, color: '#726c63', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span
+            title={name}
+            style={{
+              display: 'block', fontSize: 11, color: '#726c63',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}
+          >
             {name}
           </span>
         )}

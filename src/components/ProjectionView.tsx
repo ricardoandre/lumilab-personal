@@ -22,22 +22,28 @@ export interface ProjectionRow {
 export function ProjectionView({ rows }: { rows: ProjectionRow[] }) {
   const screens = Grid.useBreakpoint();
   const totalNow = rows.reduce((a, r) => a + r.currentValue, 0);
-  const total5 = rows.reduce((a, r) => a + (r.in5WithAdding ?? r.in5 ?? r.currentValue), 0);
-  const total10 = rows.reduce((a, r) => a + (r.in10WithAdding ?? r.in10 ?? r.currentValue), 0);
+  const total5 = rows.reduce((a, r) => a + (r.in5 ?? r.currentValue), 0);
+  const total10 = rows.reduce((a, r) => a + (r.in10 ?? r.currentValue), 0);
+  const total5Add = rows.reduce((a, r) => a + (r.in5WithAdding ?? r.in5 ?? r.currentValue), 0);
+  const total10Add = rows.reduce((a, r) => a + (r.in10WithAdding ?? r.in10 ?? r.currentValue), 0);
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Card size={screens.lg ? 'default' : 'small'}>
         <Space direction="vertical" size={2} style={{ width: '100%' }}>
           <Typography.Text strong>All accounts together</Typography.Text>
-          <div style={{ fontSize: 13 }}>
-            Worth <strong>{usd0(totalNow)}</strong> today · <strong>{usd0(total5)}</strong> in 5 years ·{' '}
-            <strong>{usd0(total10)}</strong> in 10
+          <div style={{ fontSize: 13, marginBottom: 6 }}>Worth <strong>{usd0(totalNow)}</strong> today</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: '4px 14px', fontSize: 13, alignItems: 'baseline' }}>
+            <span />
+            <span style={{ fontSize: 12, color: '#726c63' }}>If you stop adding</span>
+            <span style={{ fontSize: 12, color: '#726c63' }}>If you keep adding</span>
+            <span style={{ fontSize: 12, color: '#726c63' }}>In 5 years</span>
+            <strong>{usd0(total5)}</strong>
+            <strong>{usd0(total5Add)}</strong>
+            <span style={{ fontSize: 12, color: '#726c63' }}>In 10 years</span>
+            <strong>{usd0(total10)}</strong>
+            <strong>{usd0(total10Add)}</strong>
           </div>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Assuming each account keeps earning what it has earned so far, and you keep adding at the
-            same pace.
-          </Typography.Text>
         </Space>
       </Card>
 
@@ -55,8 +61,10 @@ export function ProjectionView({ rows }: { rows: ProjectionRow[] }) {
               key: 'add', label: 'Assumes you add a year',
               render: (r) => <Money v={r.yearlyContribution} zeroDim />,
             },
-            { key: 'p5', label: 'In 5 years', render: (r) => (r.in5 === null ? '—' : <Money v={r.in5WithAdding ?? r.in5} />) },
-            { key: 'p10', label: 'In 10 years', render: (r) => (r.in10 === null ? '—' : <Money v={r.in10WithAdding ?? r.in10} />) },
+            { key: 'p5', label: '5 yrs — if you stop adding', render: (r) => (r.in5 === null ? '—' : <Money v={r.in5} />) },
+            { key: 'p5a', label: '5 yrs — if you keep adding', render: (r) => (r.in5WithAdding === null ? '—' : <Money v={r.in5WithAdding} />) },
+            { key: 'p10', label: '10 yrs — if you stop adding', render: (r) => (r.in10 === null ? '—' : <Money v={r.in10} />) },
+            { key: 'p10a', label: '10 yrs — if you keep adding', render: (r) => (r.in10WithAdding === null ? '—' : <Money v={r.in10WithAdding} />) },
           ]}
         />
       </Card>

@@ -4,7 +4,6 @@ import { Tag, Card, Typography, Space } from 'antd';
 import Link from 'next/link';
 import { ResponsiveRows } from './ResponsiveRows';
 import { NewAccountButton } from './NewAccountButton';
-import { AccountsTabs } from './AccountsTabs';
 import { Money } from './money';
 
 export interface AccountRow {
@@ -34,7 +33,6 @@ export function AccountsTable({
         <Typography.Title level={3} style={{ margin: 0 }}>Accounts</Typography.Title>
         <NewAccountButton providers={providers} />
       </div>
-      <AccountsTabs />
       <Card styles={{ body: { padding: 0 } }}>
         <ResponsiveRows<AccountRow>
           rows={rows}

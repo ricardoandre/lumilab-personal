@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { Card, Typography, Space, Tag, Alert, Grid, Button } from 'antd';
-import type { MonthRow, YearVsBench, Overview, StockRow } from '@/lib/gotrade/report';
+import type { MonthRow, YearVsBench, Overview, StockRow, YearIrr } from '@/lib/gotrade/report';
 import { ResponsiveRows } from './ResponsiveRows';
 import { PortfolioChart } from './PortfolioChart';
+import { ConcentrationCard } from './ConcentrationCard';
 import { usd0, Pct, Money } from './money';
 import { StockLabel } from './StockIcon';
 import { AccountStats } from './AccountStats';
@@ -20,9 +21,10 @@ const RED = '#a8071a';
  * clickable stat breakdowns live on the Dashboard. This is the long-form read.
  */
 export function AccountOverview({
-  overview, years, months, stocks,
+  overview, years, months, stocks, irr, irrYears,
 }: {
   overview: Overview | null; years: YearVsBench[]; months: MonthRow[]; stocks: StockRow[];
+  irr: number | null; irrYears: YearIrr[];
 }) {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.lg;
@@ -40,7 +42,7 @@ export function AccountOverview({
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <AccountStats overview={overview} stocks={stocks} clickable={false} />
+      <AccountStats overview={overview} stocks={stocks} years={years} irr={irr} irrYears={irrYears} clickable={false} />
 
       <Card size={size}>
         <Typography.Text type="secondary" style={{ fontSize: 13 }}>
@@ -62,6 +64,8 @@ export function AccountOverview({
           )}
         </Space>
       </Card>
+
+      <ConcentrationCard overview={overview} stocks={stocks} />
 
       <PortfolioChart months={months} />
 

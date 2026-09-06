@@ -647,3 +647,54 @@ export async function stockYearReport(db: Db, accountId: bigint, year: string): 
     };
   });
 }
+
+export interface YearIrr { year: string; irr: number | null; contributions: number }
+
+/**
+ * IRR year by year.
+ *
+ * Each year is treated as its own small investment: the opening value counts as
+ * money put in on 1 January, every deposit counts on the day it was made, and
+ * the closing value counts as taking it all out on 31 December. The rate that
+ * balances those is that year's money-weighted return — so a year where the
+ * deposits happened to land before a rally scores higher than the plain
+ * time-weighted figure for the same year, which is the whole point of IRR.
+ */
+export async function yearlyIrr(db: Db, accountId: bigint, months: MonthRow[]): Promise<YearIrr[]> {
+  const flows = await db.transaction.findMany({
+    where: { accountId, type: { in: ['DEPOSIT', 'WITHDRAWAL', 'JOURNAL'] } },
+    orderBy: { tradeDate: 'asc' },
+    select: { tradeDate: true, netAmount: true },
+  });
+
+  const byYear = new Map<string, MonthRow[]>();
+  for (const m of months) {
+    const y = m.period.slice(0, 4);
+    if (!byYear.has(y)) byYear.set(y, []);
+    byYear.get(y)!.push(m);
+  }
+
+  const out: YearIrr[] = [];
+  for (const [year, ms] of [...byYear.entries()].sort()) {
+    const idx = months.indexOf(ms[0]);
+    const opening = idx > 0 ? months[idx - 1].portfolioValue : 0;
+    const closing = ms[ms.length - 1].portfolioValue;
+    const start = new Date(Date.UTC(Number(year), 0, 1));
+    const end = new Date(ms[ms.length - 1].periodEnd);
+
+    const cf: CashFlow[] = [];
+    if (opening > 0) cf.push({ date: start, amount: -opening });
+    for (const f of flows) {
+      const d = f.tradeDate as Date;
+      if (d >= start && d <= end) cf.push({ date: d, amount: -num(f.netAmount) });
+    }
+    cf.push({ date: end, amount: closing });
+
+    out.push({
+      year,
+      irr: cf.length >= 2 ? xirr(cf) : null,
+      contributions: r2(ms.reduce((a, m) => a + m.contributions, 0)),
+    });
+  }
+  return out;
+}

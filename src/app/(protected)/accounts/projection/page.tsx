@@ -5,7 +5,6 @@ import { requireUser } from '@/lib/require-user';
 import {
   monthlySeries, benchmarkMonthly, overviewFrom, accountIrr, project, contributionPace, stockReport,
 } from '@/lib/gotrade/report';
-import { AccountsTabs } from '@/components/AccountsTabs';
 import { ProjectionView, type ProjectionRow } from '@/components/ProjectionView';
 import { PageHeading } from '@/components/PageHeading';
 
@@ -57,8 +56,7 @@ export default async function ProjectionPage() {
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <PageHeading title="Accounts" />
-      <AccountsTabs />
+      <PageHeading title="Projection" />
       <ProjectionView rows={rows} />
     </Space>
   );

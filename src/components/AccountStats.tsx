@@ -1,7 +1,7 @@
 'use client';
 
 import { Row, Col, Card, Statistic, Typography, Grid } from 'antd';
-import type { Overview, StockRow, YearVsBench } from '@/lib/gotrade/report';
+import type { Overview, StockRow, YearVsBench, YearIrr } from '@/lib/gotrade/report';
 import { StatCard, BreakdownLine, BreakdownNote, BreakdownStack } from './StatCard';
 import { usd, usd0, Pct, Money } from './money';
 import { StockLabel } from './StockIcon';
@@ -27,10 +27,10 @@ const monthName = (period: string | null) => {
  * fully counted in the denominator of the first while having had no time to grow.
  */
 export function AccountStats({
-  overview, stocks, years, irr, clickable = true,
+  overview, stocks, years, irr, irrYears, clickable = true,
 }: {
   overview: Overview; stocks: StockRow[];
-  years?: YearVsBench[]; irr?: number | null;
+  years?: YearVsBench[]; irr?: number | null; irrYears?: YearIrr[];
   clickable?: boolean;
 }) {
   // Breakdown lists are ordered by RETURN, best first — the ranking is the point
@@ -54,14 +54,23 @@ export function AccountStats({
               drawerTitle="Money you put in"
               breakdown={
                 <BreakdownStack>
-                  <BreakdownLine label="Deposits and credits" value={<Money v={overview.contributions} />} strong />
-                  <BreakdownLine label="Invested since" value={monthName(overview.investedSince) ?? '—'} />
-                  <BreakdownLine label="Worth today" value={<Money v={overview.latestValue} />} divider />
-                  <BreakdownLine label="Difference" value={<Money v={overview.gain} />} strong />
                   <BreakdownNote>
-                    Gotrade&apos;s promotional credits count here as money paid in, not as return, so a
-                    broker giveaway cannot flatter how your own capital performed.
+                    Everything you have paid into this account since{' '}
+                    {monthName(overview.investedSince) ?? 'the beginning'}. Gotrade&apos;s promotional
+                    credits count here as money paid in, not as return, so a broker giveaway cannot
+                    flatter how your own capital performed.
                   </BreakdownNote>
+                  {years && years.length > 0 && (
+                    <>
+                      <div style={{ marginTop: 16, marginBottom: 4, fontWeight: 600 }}>Paid in, year by year</div>
+                      {[...years].reverse().map((y) => (
+                        <BreakdownLine key={y.year} label={y.year} value={<Money v={y.contributions} zeroDim />} />
+                      ))}
+                    </>
+                  )}
+                  <BreakdownLine label="Total paid in" value={<Money v={overview.contributions} />} strong divider />
+                  <BreakdownLine label="Worth today" value={<Money v={overview.latestValue} />} />
+                  <BreakdownLine label="Difference" value={<Money v={overview.gain} />} strong />
                 </BreakdownStack>
               } />
           ) : plain('Total money invested', usd(overview.contributions))}
@@ -158,16 +167,15 @@ export function AccountStats({
               drawerTitle="Return a year"
               breakdown={
                 <BreakdownStack>
+                  <BreakdownNote>
+                    This measures the investments, not your timing. Each month is scored on its own —
+                    how much the pot moved, ignoring anything you paid in that month — and the months
+                    are then multiplied together. Because deposits are stripped out, this is the only
+                    figure that can fairly be set beside SPY, which has no deposits at all.
+                  </BreakdownNote>
+                  <div style={{ marginTop: 16 }} />
                   <BreakdownLine label="You" value={<Pct v={overview.annualised} bold />} />
                   <BreakdownLine label="SPY, same months" value={<Pct v={overview.benchAnnualised} />} />
-                  {irr !== undefined && irr !== null && (
-                    <BreakdownLine label="Your own money's rate (IRR)" note="what your actual deposits earned"
-                      value={<Pct v={irr} />} />
-                  )}
-                  {overview.dividendYield !== null && (
-                    <BreakdownLine label="Dividend yield" note={`${usd(overview.dividends12m)} received in the last 12 months`}
-                      value={<Pct v={overview.dividendYield} />} />
-                  )}
                   <BreakdownLine label="Whole period" value={<Pct v={overview.sinceInception} />} divider />
 
                   {years && years.length > 0 && (
@@ -181,25 +189,76 @@ export function AccountStats({
                     </>
                   )}
 
-                  <BreakdownNote>
-                    <strong>Return a year</strong> measures the investments, not your timing. Each
-                    month is scored on its own — how much the pot moved, ignoring anything you paid
-                    in that month — and the months are then multiplied together. Because deposits
-                    are stripped out, this is the only figure that can fairly be set beside SPY,
-                    which has no deposits at all.
-                    <br /><br />
-                    <strong>IRR</strong> asks the opposite question: what rate did <em>your</em>
-                    money earn? Picture every deposit you made growing at one steady rate; IRR is
-                    the rate that would land you exactly on today&apos;s balance. So it rewards good
-                    timing and punishes bad. Higher than &quot;return a year&quot; means your money
-                    happened to go in at good moments; lower means it went in at poor ones.
-                    <br /><br />
-                    <strong>Dividend yield</strong> is the cash paid out to you over the last twelve
-                    months, after tax, against what the portfolio is worth today.
-                  </BreakdownNote>
+
                 </BreakdownStack>
               } />
           ) : plain('Return a year', pct(overview.annualised), (overview.annualised ?? 0) >= 0 ? GREEN : RED)}
+        </Col>
+        <Col xs={12} lg={6}>
+          {clickable ? (
+            <StatCard small={small} title="Your money's rate (IRR)" value={pct(irr ?? null)}
+              valueColor={(irr ?? 0) >= 0 ? GREEN : RED}
+              drawerTitle="IRR — what your own deposits earned"
+              breakdown={
+                <BreakdownStack>
+                  <BreakdownNote>
+                    Picture every deposit you made growing at one steady rate. IRR is the rate that
+                    would land you exactly on today&apos;s balance — so unlike &quot;return a
+                    year&quot;, it rewards good timing and punishes bad.
+                  </BreakdownNote>
+                  <div style={{ marginTop: 16 }} />
+                  <BreakdownLine label="Your money's rate (IRR)" value={<Pct v={irr ?? null} bold />} />
+                  <BreakdownLine label="The investments' rate" value={<Pct v={overview.annualised} />} />
+                  <BreakdownLine label="SPY, same months" value={<Pct v={overview.benchAnnualised} />} divider />
+                  {irrYears && irrYears.length > 0 && (
+                    <>
+                      <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>Year by year</div>
+                      {[...irrYears].reverse().map((y) => (
+                        <BreakdownLine key={y.year} label={y.year}
+                          note={y.contributions !== 0 ? `${usd(y.contributions)} paid in` : 'nothing paid in'}
+                          value={<Pct v={y.irr} />} />
+                      ))}
+                    </>
+                  )}
+                  <BreakdownNote>
+                    Picture every deposit you made growing at one steady rate. IRR is the rate that
+                    would land you exactly on today&apos;s balance — so it rewards good timing and
+                    punishes bad.
+                    <br /><br />
+                    {irr !== undefined && irr !== null && overview.annualised !== null && (
+                      irr > overview.annualised
+                        ? 'Yours is HIGHER than the investments\u2019 own rate, which means your money tended to go in at good moments.'
+                        : 'Yours is LOWER than the investments\u2019 own rate, which means your money tended to go in at less good moments.'
+                    )}
+                  </BreakdownNote>
+                </BreakdownStack>
+              } />
+          ) : plain("Your money's rate (IRR)", pct(irr ?? null), (irr ?? 0) >= 0 ? GREEN : RED)}
+        </Col>
+        <Col xs={12} lg={6}>
+          {clickable ? (
+            <StatCard small={small} title="Dividend yield" value={pct(overview.dividendYield)}
+              drawerTitle="Dividend yield"
+              breakdown={
+                <BreakdownStack>
+                  <BreakdownLine label="Received in the last 12 months" note="after 15% US withholding tax"
+                    value={<Money v={overview.dividends12m} />} />
+                  <BreakdownLine label="Portfolio value" value={<Money v={overview.latestValue} />} />
+                  <BreakdownLine label="Yield" value={<Pct v={overview.dividendYield} bold />} strong divider />
+                  <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>By stock — highest yield first</div>
+                  {[...stocks].sort((a, b) => (b.dividendYield ?? -1) - (a.dividendYield ?? -1)).map((s) => (
+                    <BreakdownLine key={s.symbol} label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
+                      note={s.dividendYield === null ? 'pays no dividend' : undefined}
+                      value={<Pct v={s.dividendYield} />} />
+                  ))}
+                  <BreakdownNote>
+                    A run-rate: the cash actually paid out over the last twelve months against what
+                    the portfolio is worth today. A lifetime total would understate a portfolio still
+                    being built.
+                  </BreakdownNote>
+                </BreakdownStack>
+              } />
+          ) : plain('Dividend yield', pct(overview.dividendYield))}
         </Col>
       </Row>
       <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
