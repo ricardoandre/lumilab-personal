@@ -22,6 +22,15 @@ const nextConfig: NextConfig = {
   // against are exactly the ones that ship.
   transpilePackages: ['@lumilab/engine'],
 
+  // @lumilab/engine is a `file:` dependency, so node_modules holds a SYMLINK to
+  // /home/claudeuser/lumilab-engine — outside this project. Turbopack refuses to
+  // compile anything above its root, which surfaced as "Module not found: Can't
+  // resolve '@lumilab/engine/runtime'" even though TypeScript resolved it fine.
+  // Next's own docs require pointing root at the common parent of the app and
+  // its linked packages. It widens filesystem watching, which is acceptable here
+  // and only matters in development.
+  turbopack: { root: '/home/claudeuser' },
+
   // Blue/green deploy: the live server serves one slot while a build writes the
   // other, so a failed build can never corrupt the running site.
   distDir: process.env.NEXT_DIST_DIR || '.next',
