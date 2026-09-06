@@ -51,7 +51,10 @@ export function ProjectionView({ rows }: { rows: ProjectionRow[] }) {
             { key: 'now', label: 'Value now', render: (r) => <Money v={r.currentValue} /> },
             { key: 'ret', label: 'Average return a year', render: (r) => <Pct v={r.annualised} bold /> },
             { key: 'irr', label: 'Your money’s rate (IRR)', render: (r) => <Pct v={r.irr} /> },
-            { key: 'add', label: 'You add a year', render: (r) => <Money v={r.yearlyContribution} zeroDim /> },
+            {
+              key: 'add', label: 'Assumes you add a year',
+              render: (r) => <Money v={r.yearlyContribution} zeroDim />,
+            },
             { key: 'p5', label: 'In 5 years', render: (r) => (r.in5 === null ? '—' : <Money v={r.in5WithAdding ?? r.in5} />) },
             { key: 'p10', label: 'In 10 years', render: (r) => (r.in10 === null ? '—' : <Money v={r.in10WithAdding ?? r.in10} />) },
           ]}
@@ -64,10 +67,15 @@ export function ProjectionView({ rows }: { rows: ProjectionRow[] }) {
         message="This is arithmetic, not a forecast"
         description={
           <>
-            Each projection compounds today&apos;s value at the rate that account has achieved so far,
-            and adds contributions at your recent pace. Markets do not deliver an average every year —
-            2022 was −18% for SPY — so treat these as “what this rate would produce”, not a prediction.
-            A short history makes the rate less reliable, not more.
+            <strong>&quot;Assumes you add a year&quot; is exactly that — an assumption.</strong> It is
+            your OWN average so far: everything you have paid into that account, divided by the years
+            it has been open. Nobody has committed to it. If you stop paying in, the right column to
+            read is the smaller one; if you pay in more, both are too low.
+            <br /><br />
+            The rest is compounding today&apos;s balance at the rate that account has achieved so far.
+            Markets do not deliver an average every year — 2022 was −18% for SPY — so treat these as
+            &quot;what this rate would produce&quot;, not a prediction. A short history makes the rate
+            less reliable, not more.
           </>
         }
       />

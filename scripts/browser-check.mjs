@@ -128,7 +128,6 @@ for (const [name, path, expect] of [
   ['stocks report', '/accounts/1/report/stocks', 'Return a year'],
   ['transactions', '/accounts/1/report/transactions', 'DEPOSIT'.toLowerCase()],
   ['upload button', '/accounts/1', 'Upload'],
-  ['missing-statement warning', '/accounts/1', 'missing'],
   ['projection', '/accounts/projection', 'In 5 years'],
 ]) {
   await goto(BASE + path);

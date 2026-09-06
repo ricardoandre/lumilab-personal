@@ -34,6 +34,10 @@ export interface YearRow {
 }
 
 export interface StockRow {
+  /** Share of the whole portfolio, including cash — the concentration figure. */
+  weightPct: number;
+  /** Dividends over the last 12 months as a share of today's value. */
+  dividendYield: number | null;
   symbol: string;
   name: string | null;
   quantity: number;
@@ -221,6 +225,22 @@ export async function stockReport(db: Db, accountId: bigint): Promise<StockRow[]
   );
   const asOf: Date = latest.periodEnd;
 
+  const totalValue =
+    latest.holdings.reduce((a: number, h: any) => a + num(h.marketValue), 0) + num(latest.endingBalance);
+
+  // Dividends over the last 12 months, per security — a run-rate yield rather
+  // than a lifetime total, which would understate a recently-built position.
+  const yearAgo = new Date(latest.periodEnd);
+  yearAgo.setUTCFullYear(yearAgo.getUTCFullYear() - 1);
+  const recentDivs = await db.transaction.groupBy({
+    by: ['securityId'],
+    where: { accountId, type: { in: ['DIVIDEND', 'TAX'] }, tradeDate: { gte: yearAgo } },
+    _sum: { netAmount: true },
+  });
+  const recentBySec = new Map<string, number>(
+    recentDivs.map((d: any) => [String(d.securityId), num(d._sum.netAmount)]),
+  );
+
   return latest.holdings.map((h: any) => {
     const costBasis = num(h.costBasis);
     const marketValue = num(h.marketValue);
@@ -230,9 +250,12 @@ export async function stockReport(db: Db, accountId: bigint): Promise<StockRow[]
     const first = firstBySec.get(String(h.securityId)) ?? null;
     const years = first ? (asOf.getTime() - first.getTime()) / (365.25 * 24 * 3600 * 1000) : null;
     const simple = costBasis > 0 ? r4(totalReturn / costBasis) : null;
+    const recent = r2(recentBySec.get(String(h.securityId)) ?? 0);
     return {
       symbol: h.security.symbol,
       name: h.security.name,
+      weightPct: totalValue > 0 ? r4(marketValue / totalValue) : 0,
+      dividendYield: marketValue > 0 && recent > 0 ? r4(recent / marketValue) : null,
       quantity: Number(h.quantity),
       costBasis, marketValue, unrealized, dividends, totalReturn,
       returnPct: simple,
@@ -375,9 +398,15 @@ export interface Overview {
   lastPeriod: string | null;
   /** What the idle cash cost, valued at the benchmark's return over the same months. */
   cashDragUsd: number | null;
+  /** Dividends received in the last 12 months, and that as a share of value. */
+  dividends12m: number;
+  dividendYield: number | null;
+  /** Largest single holding as a share of the account — the concentration risk. */
+  topWeightPct: number | null;
+  topSymbol: string | null;
 }
 
-export function overviewFrom(months: MonthRow[], bench: Map<string, number>): Overview | null {
+export function overviewFrom(months: MonthRow[], bench: Map<string, number>, stocks: StockRow[] = []): Overview | null {
   if (!months.length) return null;
   const latest = months[months.length - 1];
   const rs = months.map((m) => m.returnPct);
@@ -396,6 +425,10 @@ export function overviewFrom(months: MonthRow[], bench: Map<string, number>): Ov
 
   const income = r2(months.reduce((a, m) => a + m.income, 0));
   const gain = r2(months.reduce((a, m) => a + m.gain, 0));
+  // Last twelve statement months, so the yield is a run-rate rather than a
+  // lifetime figure that would understate a portfolio still being built.
+  const dividends12m = r2(months.slice(-12).reduce((a, m) => a + m.income, 0));
+  const top = [...stocks].sort((a, b) => b.weightPct - a.weightPct)[0] ?? null;
 
   return {
     latestValue: latest.portfolioValue,
@@ -421,6 +454,10 @@ export function overviewFrom(months: MonthRow[], bench: Map<string, number>): Ov
     firstPeriod: months[0].period,
     lastPeriod: latest.period,
     cashDragUsd: dragKnown ? r2(drag) : null,
+    dividends12m,
+    dividendYield: latest.portfolioValue > 0 && dividends12m > 0 ? r4(dividends12m / latest.portfolioValue) : null,
+    topWeightPct: top ? top.weightPct : null,
+    topSymbol: top ? top.symbol : null,
   };
 }
 

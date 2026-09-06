@@ -26,7 +26,7 @@ export default async function OverviewReportPage({ params }: { params: Promise<{
   return (
     <ReportShell accountId={id} accountName={account.name} {...health}>
       <AccountOverview
-        overview={overviewFrom(months, bench)}
+        overview={overviewFrom(months, bench, stocks)}
         years={yearlyVsBenchmark(months, bench)}
         months={months}
         stocks={stocks}

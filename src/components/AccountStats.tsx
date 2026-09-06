@@ -75,10 +75,18 @@ export function AccountStats({
                   {[...stocks].sort((a, b) => b.marketValue - a.marketValue).map((s) => (
                     <BreakdownLine key={s.symbol}
                       label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
+                      note={`${(s.weightPct * 100).toFixed(1)}% of the account`}
                       value={<Money v={s.marketValue} />} />
                   ))}
                   <BreakdownLine label="Cash" note="uninvested" value={<Money v={overview.cash} />} divider />
                   <BreakdownLine label="Total" value={<Money v={overview.latestValue} />} strong divider />
+                  {overview.topSymbol && overview.topWeightPct !== null && overview.topWeightPct > 0.3 && (
+                    <BreakdownNote>
+                      <strong>{overview.topSymbol} is {(overview.topWeightPct * 100).toFixed(0)}% of this
+                      account.</strong> Not a mistake in itself — but it means your result depends
+                      more on that one holding than on everything else combined.
+                    </BreakdownNote>
+                  )}
                   <BreakdownNote>
                     Share prices are those printed on your latest statement — the only price source
                     there is, since Gotrade has no API.
@@ -130,10 +138,14 @@ export function AccountStats({
                       value={<Pct v={s.returnPct} />} />
                   ))}
                   <BreakdownNote>
-                    This is what your money grew by — the same measure Gotrade&apos;s own app shows.
-                    &quot;Return a year&quot; answers a different question: how the investments
-                    performed regardless of when money arrived. Money paid in recently is fully
-                    counted here but has had no time to grow, which is why the two differ.
+                    <strong>How this is worked out:</strong> what you have now, minus what you put
+                    in, divided by what you put in. Nothing more. It is the figure Gotrade&apos;s own
+                    app shows.
+                    <br /><br />
+                    It has one blind spot: money paid in last month counts in full, even though it
+                    has had no time to grow. So a portfolio you are actively adding to will always
+                    look worse on this measure than it really is. &quot;Return a year&quot; is the
+                    one that corrects for that.
                   </BreakdownNote>
                 </BreakdownStack>
               } />
@@ -152,6 +164,10 @@ export function AccountStats({
                     <BreakdownLine label="Your own money's rate (IRR)" note="what your actual deposits earned"
                       value={<Pct v={irr} />} />
                   )}
+                  {overview.dividendYield !== null && (
+                    <BreakdownLine label="Dividend yield" note={`${usd(overview.dividends12m)} received in the last 12 months`}
+                      value={<Pct v={overview.dividendYield} />} />
+                  )}
                   <BreakdownLine label="Whole period" value={<Pct v={overview.sinceInception} />} divider />
 
                   {years && years.length > 0 && (
@@ -166,10 +182,20 @@ export function AccountStats({
                   )}
 
                   <BreakdownNote>
-                    Time-weighted: each month&apos;s performance chained together, so paying money in
-                    is never counted as a gain. This is how a fund&apos;s return is quoted, and the
-                    fair way to compare against SPY. IRR is different again — the rate your own
-                    deposits earned, given exactly when you made them.
+                    <strong>Return a year</strong> measures the investments, not your timing. Each
+                    month is scored on its own — how much the pot moved, ignoring anything you paid
+                    in that month — and the months are then multiplied together. Because deposits
+                    are stripped out, this is the only figure that can fairly be set beside SPY,
+                    which has no deposits at all.
+                    <br /><br />
+                    <strong>IRR</strong> asks the opposite question: what rate did <em>your</em>
+                    money earn? Picture every deposit you made growing at one steady rate; IRR is
+                    the rate that would land you exactly on today&apos;s balance. So it rewards good
+                    timing and punishes bad. Higher than &quot;return a year&quot; means your money
+                    happened to go in at good moments; lower means it went in at poor ones.
+                    <br /><br />
+                    <strong>Dividend yield</strong> is the cash paid out to you over the last twelve
+                    months, after tax, against what the portfolio is worth today.
                   </BreakdownNote>
                 </BreakdownStack>
               } />

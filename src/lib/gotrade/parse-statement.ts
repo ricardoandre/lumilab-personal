@@ -297,8 +297,19 @@ export function reconcile(s: ParsedStatement): Reconciliation {
   const checks: Reconciliation['checks'] = [];
   const notes: string[] = [];
 
+  /**
+   * Two cents of slack on the row-sum checks.
+   *
+   * Alpaca's own figures round and shift by a cent — withholding tax is excluded
+   * from a period's totals and carried into the next month, which showed up as a
+   * $0.01 Subtraction difference on July 2021. Refusing a statement over one cent
+   * is a false alarm, and a check that cries wolf gets ignored. Two cents is far
+   * too small to hide a missed row: the smallest real row in five years of
+   * statements is $0.18, and a dropped trade is hundreds.
+   */
+  const TOLERANCE = 0.02;
   const add = (name: string, expected: number | null, actual: number | null) => {
-    const ok = expected !== null && actual !== null && r2(expected) === r2(actual);
+    const ok = expected !== null && actual !== null && Math.abs(r2(expected) - r2(actual)) <= TOLERANCE;
     checks.push({ name, ok, expected, actual });
   };
 
@@ -313,8 +324,19 @@ export function reconcile(s: ParsedStatement): Reconciliation {
 
   // 2. Our rows against its totals — the check that actually tests the parser.
   add('trade rows == Trade Transaction', cash.tradeTransaction, sum((t) => t.type === 'BUY' || t.type === 'SELL'));
-  add('deposits+income == Addition', cash.addition,
-    sum((t) => t.type === 'DEPOSIT' || t.type === 'DIVIDEND' || t.type === 'INTEREST' || t.type === 'JOURNAL'));
+
+  // Alpaca sorts the cash summary by SIGN, not by type: every positive row lands
+  // in Addition and every negative one in Subtraction. Withholding tax is
+  // usually negative, but it can be POSITIVE when an over-withholding is
+  // refunded — September 2025 has "Div. Adj(NRA Withheld) NVO +$0.18" — and a
+  // check that assumed Addition meant deposits and dividends alone rejected an
+  // otherwise perfect statement over eighteen cents.
+  const NON_TRADE = ['DEPOSIT', 'WITHDRAWAL', 'DIVIDEND', 'INTEREST', 'JOURNAL', 'TAX', 'ADJUSTMENT'];
+  const nonTrade = s.transactions.filter((t) => NON_TRADE.includes(t.type));
+  add('positive rows == Addition', cash.addition,
+    r2(nonTrade.filter((t) => t.amount > 0).reduce((a, t) => a + t.amount, 0)));
+  add('negative rows == Subtraction', cash.subtraction,
+    r2(-nonTrade.filter((t) => t.amount < 0).reduce((a, t) => a + t.amount, 0)));
 
   // 3. Holdings quantity must match what the ledger implies, where we hold history.
   return { ok: checks.every((c) => c.ok), checks, notes };

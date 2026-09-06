@@ -47,7 +47,7 @@ export default async function AccountDashboardPage({ params }: { params: Promise
       })()
     : null;
 
-  const overview = overviewFrom(months, bench);
+  const overview = overviewFrom(months, bench, stocks);
   const [yearStocks, irr] = await Promise.all([
     latestYear ? stockYearReport(prisma, accountId, latestYear.year) : Promise.resolve([]),
     overview

@@ -7,7 +7,7 @@ import { ResponsiveRows } from './ResponsiveRows';
 import { Pct, Money } from './money';
 import { StockLabel } from './StockIcon';
 
-type SortKey = 'Return a year' | 'Total return' | 'Portfolio value' | 'Money in' | 'Dividends';
+type SortKey = 'Return a year' | 'Total return' | 'Portfolio value' | 'Money in' | 'Dividends' | 'Share of account';
 
 // Sorting always puts the biggest first, and a missing value sorts LAST rather
 // than as zero — a stock too new to annualise is unknown, not worst.
@@ -17,6 +17,7 @@ const SORTS: Record<SortKey, (a: StockRow, b: StockRow) => number> = {
   'Portfolio value': (a, b) => b.marketValue - a.marketValue,
   'Money in': (a, b) => b.costBasis - a.costBasis,
   Dividends: (a, b) => b.dividends - a.dividends,
+  'Share of account': (a, b) => b.weightPct - a.weightPct,
 };
 
 export function StocksReport({ stocks }: { stocks: StockRow[] }) {
@@ -48,9 +49,11 @@ export function StocksReport({ stocks }: { stocks: StockRow[] }) {
             { key: 'ret', label: 'Total return', render: (r) => <Pct v={r.returnPct} bold /> },
             { key: 'ann', label: 'Return a year', render: (r) => <Pct v={r.annualisedPct} /> },
             { key: 'val', label: 'Portfolio value', render: (r) => <Money v={r.marketValue} /> },
+            { key: 'weight', label: 'Share of account', render: (r) => `${(r.weightPct * 100).toFixed(1)}%` },
             { key: 'cost', label: 'Money in', render: (r) => <Money v={r.costBasis} /> },
             { key: 'unr', label: 'Unrealised', render: (r) => <Money v={r.unrealized} /> },
             { key: 'div', label: 'Dividends', render: (r) => <Money v={r.dividends} zeroDim /> },
+            { key: 'yield', label: 'Dividend yield', render: (r) => <Pct v={r.dividendYield} /> },
             { key: 'qty', label: 'Shares', render: (r) => r.quantity },
             { key: 'held', label: 'Held since', render: (r) => r.heldSince ?? '—' },
           ]}

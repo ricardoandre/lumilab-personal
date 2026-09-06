@@ -71,6 +71,7 @@ export function AccountOverview({
           fields={[
             { key: 'sym', label: 'Stock', primary: true, render: (r) => <StockLabel symbol={r.symbol} name={r.name} /> },
             { key: 'val', label: 'Portfolio value', render: (r) => <Money v={r.marketValue} /> },
+            { key: 'weight', label: 'Share of account', render: (r) => `${(r.weightPct * 100).toFixed(1)}%` },
             { key: 'eq', label: 'Money in', render: (r) => <Money v={r.costBasis} /> },
             { key: 'ret', label: 'Return', render: (r) => <Pct v={r.returnPct} bold /> },
             { key: 'ann', label: 'Return a year', render: (r) => <Pct v={r.annualisedPct} /> },

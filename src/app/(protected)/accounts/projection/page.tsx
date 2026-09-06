@@ -3,7 +3,7 @@ import '@/engine.server';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/require-user';
 import {
-  monthlySeries, benchmarkMonthly, overviewFrom, accountIrr, project, contributionPace,
+  monthlySeries, benchmarkMonthly, overviewFrom, accountIrr, project, contributionPace, stockReport,
 } from '@/lib/gotrade/report';
 import { AccountsTabs } from '@/components/AccountsTabs';
 import { ProjectionView, type ProjectionRow } from '@/components/ProjectionView';
@@ -21,11 +21,12 @@ export default async function ProjectionPage() {
 
   const rows: ProjectionRow[] = [];
   for (const a of accounts) {
-    const [months, bench] = await Promise.all([
+    const [months, bench, stocks] = await Promise.all([
       monthlySeries(prisma, a.id),
       benchmarkMonthly(prisma, a.id),
+      stockReport(prisma, a.id),
     ]);
-    const overview = overviewFrom(months, bench);
+    const overview = overviewFrom(months, bench, stocks);
     if (!overview || !months.length) continue;
 
     const latest = months[months.length - 1];
