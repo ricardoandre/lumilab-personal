@@ -33,7 +33,14 @@ export function NavAccounts() {
                     label: a.name,
                     items: [
                       { label: 'Overview', href: `/accounts/${a.id}` },
-                      { label: 'Report', href: `/accounts/${a.id}/report` },
+                      {
+                        label: 'Report',
+                        href: `/accounts/${a.id}/report`,
+                        // The Transactions tab is a sibling ROUTE under the same
+                        // nav entry; without this the entry loses its highlight
+                        // when you switch tabs.
+                        matchHrefs: [`/accounts/${a.id}/report/transactions`],
+                      },
                     ],
                   })),
                   { label: 'Statement Imports', badge: 'next' as const },

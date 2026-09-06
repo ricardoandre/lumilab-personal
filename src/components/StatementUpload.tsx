@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, Upload, Button, Typography, Space, Tag, Alert, App } from 'antd';
+import { Upload, Button, Typography, Space, Tag, Alert, App } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd';
 
@@ -11,7 +11,7 @@ interface Result {
   periodLabel: string | null; rowsInserted: number; holdings: number; error?: string;
 }
 
-export function StatementUpload({ accountId }: { accountId: string }) {
+export function StatementUpload({ accountId, onDone }: { accountId: string; onDone?: () => void }) {
   const { message } = App.useApp();
   const router = useRouter();
   const [files, setFiles] = useState<UploadFile[]>([]);
@@ -34,6 +34,7 @@ export function StatementUpload({ accountId }: { accountId: string }) {
       message.success(`${s.imported} imported, ${s.duplicates} already had, ${s.failed} failed.`);
       setFiles([]);
       router.refresh(); // the page's own figures are now stale
+      onDone?.();
     } catch {
       message.error('Upload failed.');
     } finally {
@@ -42,7 +43,7 @@ export function StatementUpload({ accountId }: { accountId: string }) {
   }
 
   return (
-    <Card title="Upload statements">
+    <>
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
           Drop your Gotrade monthly statement PDFs here — as many at once as you like.
@@ -91,6 +92,6 @@ export function StatementUpload({ accountId }: { accountId: string }) {
           </Space>
         )}
       </Space>
-    </Card>
+    </>
   );
 }
