@@ -39,7 +39,14 @@ export function NavAccounts() {
                     // Gold has no statements, so no Report tabs to hang off it —
                     // one entry rather than a submenu with a single child.
                     a.kind === 'COMMODITY'
-                      ? { label: a.name, href: `/accounts/${a.id}/gold` }
+                      ? {
+                          label: a.name,
+                          items: [
+                            { label: 'Dashboard', href: `/accounts/${a.id}/gold` },
+                            { label: 'Transactions', href: `/accounts/${a.id}/gold/transactions` },
+                            { label: 'Report', href: `/accounts/${a.id}/gold/report` },
+                          ],
+                        }
                       : {
                           label: a.name,
                           items: [

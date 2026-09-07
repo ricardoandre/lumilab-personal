@@ -128,7 +128,9 @@ for (const [name, path, expect] of [
   ['transactions', '/accounts/1/report/transactions', 'DEPOSIT'.toLowerCase()],
   ['upload button', '/accounts/1', 'Upload'],
   ['projection', '/accounts/projection', 'In 5 years'],
-  ['gold', '/accounts/3/gold', 'Gold held'],
+  ['gold dashboard', '/accounts/3/gold', 'Which purchases did best'],
+  ['gold transactions', '/accounts/3/gold/transactions', 'Gold purchases'],
+  ['gold report', '/accounts/3/gold/report', 'By owner'],
   ['users', '/users', 'New user'],
 ]) {
   await goto(BASE + path);

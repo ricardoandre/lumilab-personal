@@ -8,7 +8,8 @@ import {
 } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { GoldOverview, GoldLot } from '@/lib/gold/report';
-import { ResponsiveRows } from './ResponsiveRows';
+import { GoldTabs } from './GoldTabs';
+import { GoldBestPurchases } from './GoldBestPurchases';
 import { PieChart, type Slice } from './PieChart';
 import { StatCard, BreakdownLine, BreakdownNote, BreakdownStack } from './StatCard';
 import { Pct } from './money';
@@ -69,6 +70,8 @@ export function GoldDashboard({ accountId, data }: { accountId: string; data: Go
           {screens.sm ? 'Add purchase' : 'Add'}
         </Button>
       </div>
+
+      <GoldTabs accountId={accountId} />
 
       {data.pricePerGram === null ? (
         <Alert type="warning" showIcon message="No gold price available"
@@ -166,30 +169,7 @@ export function GoldDashboard({ accountId, data }: { accountId: string; data: Go
         </Card>
       )}
 
-      <Card title="Purchases" styles={{ body: { padding: 0 } }} size={small ? 'small' : 'default'}>
-        <ResponsiveRows<GoldLot & { key: string }>
-          rows={data.lots.map((l) => ({ ...l, key: l.id }))}
-          emptyText="No purchases yet."
-          fields={[
-            { key: 'date', label: 'Date', primary: true, render: (r) => r.date },
-            { key: 'who', label: 'For', primary: true, render: (r) => r.remarks ?? '—' },
-            { key: 'g', label: 'Grams', render: (r) => r.grams.toFixed(2) },
-            { key: 'ppg', label: 'Price per gram', render: (r) => <Money v={r.pricePerGram} /> },
-            { key: 'total', label: 'Total paid', render: (r) => <Money v={r.total} /> },
-            { key: 'now', label: 'Worth now', render: (r) => <Money v={r.valueNow} /> },
-            { key: 'gain', label: 'Gain', render: (r) => <Money v={r.gain} /> },
-            { key: 'ret', label: 'Return', render: (r) => <Pct v={r.returnPct} bold /> },
-            {
-              key: 'del', label: '',
-              render: (r) => (
-                <Popconfirm title="Remove this purchase?" onConfirm={() => remove(r.id)} okText="Remove" cancelText="Keep">
-                  <Button type="text" danger size="small">Remove</Button>
-                </Popconfirm>
-              ),
-            },
-          ]}
-        />
-      </Card>
+      <GoldBestPurchases lots={data.lots} pricePerGram={data.pricePerGram} />
 
       <Drawer
         title="Add a gold purchase"

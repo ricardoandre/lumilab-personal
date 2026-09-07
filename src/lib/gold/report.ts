@@ -88,7 +88,6 @@ export async function goldOverview(accountId: bigint): Promise<GoldOverview> {
     .sort((a, b) => b.valueNow - a.valueNow);
 
   const oldest = lots.length ? lots[lots.length - 1].date : null;
-  const years = oldest ? (Date.now() - new Date(oldest).getTime()) / (365.25 * 24 * 3600 * 1000) : null;
 
   // IRR over the real purchase dates, with today's value as the closing inflow.
   let irr: number | null = null;
@@ -106,9 +105,20 @@ export async function goldOverview(accountId: bigint): Promise<GoldOverview> {
     valueNow,
     gain,
     simpleReturn: invested > 0 ? r4(gain / invested) : null,
-    // Simple return spread over the holding period; IRR is the better figure
-    // here and is shown beside it.
-    annualised: invested > 0 && years && years >= 0.25 ? r4(Math.pow(1 + gain / invested, 1 / years) - 1) : null,
+    /**
+     * The annual rate IS the IRR here, deliberately.
+     *
+     * The obvious alternative — spread the total return over the time since the
+     * FIRST purchase — is wrong for an account bought in instalments, and badly
+     * so: it reported 9.23% against a true 18.26%. It stretches 153% over the
+     * 10.5 years since March 2016, while 73% of the money only went in from 2024
+     * and has been invested an average of 3.98 years. IRR credits each purchase
+     * for the time it was actually held, which is the whole question.
+     *
+     * A statement account can chain its months and get a time-weighted figure.
+     * Gold has no month-end history, so IRR is the only honest annual rate.
+     */
+    annualised: irr,
     irr,
     pricePerGram: perGram,
     priceFetchedAt: price ? price.fetchedAt.toISOString().slice(0, 16).replace('T', ' ') : null,
