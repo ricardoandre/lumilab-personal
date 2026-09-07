@@ -128,6 +128,8 @@ for (const [name, path, expect] of [
   ['transactions', '/accounts/1/report/transactions', 'DEPOSIT'.toLowerCase()],
   ['upload button', '/accounts/1', 'Upload'],
   ['projection', '/accounts/projection', 'In 5 years'],
+  ['ipot dashboard', '/accounts/4', 'Andre IPOT'],
+  ['ipot report', '/accounts/4/report', 'Year by year'],
   ['gold dashboard', '/accounts/3/gold', 'Which purchases did best'],
   ['gold transactions', '/accounts/3/gold/transactions', 'Gold purchases'],
   ['gold report', '/accounts/3/gold/report', 'By owner'],

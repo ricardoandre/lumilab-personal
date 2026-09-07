@@ -19,6 +19,9 @@ export interface MonthRow {
   /** True when the statement's printed closing balance contradicted its own
    *  transactions and the ledger figure was used instead. */
   cashCorrected: boolean;
+  /** Month the holdings valuation actually comes from — earlier than `period`
+   *  when this month had no snapshot of its own. */
+  holdingsAsOf: string | null;
   gain: number;              // value change that is NOT explained by contributions
   returnPct: number | null;  // Modified Dietz, day-weighted
 }
@@ -85,6 +88,21 @@ export async function monthlySeries(db: Db, accountId: bigint): Promise<MonthRow
   const rows: MonthRow[] = [];
   let prevValue: number | null = null;
   let prevCash: number | null = null;
+  /**
+   * Last known holdings valuation, carried forward.
+   *
+   * Gotrade prints holdings on every statement, so this never fires there. IPOT
+   * does not: its monthly statement is a cash ledger with no share price
+   * anywhere, and a holdings snapshot arrives only when a portfolio PDF is
+   * exported — 8 months out of 42. Without carrying the last one forward, a
+   * portfolio of Rp 2.2 BILLION reads as its Rp 137 million of cash in every
+   * month between snapshots, and the chart shows a crash and a recovery that
+   * never happened.
+   *
+   * Carried at the last known PRICE, so it holds the position flat rather than
+   * pretending to track the market. `holdingsStale` says when that is happening.
+   */
+  let carriedHoldings: { value: number; asOf: string } | null = null;
   /** Previous month's PRINTED closing balance — the comparison must never use a
    *  corrected value, or one repair propagates into every month after it. */
   let prevStatedClose: number | null = null;
@@ -117,7 +135,10 @@ export async function monthlySeries(db: Db, accountId: bigint): Promise<MonthRow
       ? r2((prevCash ?? 0) + monthTx.reduce((a: number, t: any) => a + num(t.netAmount), 0))
       : statedCash;
     const cashCorrected = statementBroken;
-    const holdingsValue = r2(imp.holdings.reduce((a: number, h: any) => a + num(h.marketValue), 0));
+    const ownHoldings = r2(imp.holdings.reduce((a: number, h: any) => a + num(h.marketValue), 0));
+    if (imp.holdings.length) carriedHoldings = { value: ownHoldings, asOf: period };
+    const holdingsValue = imp.holdings.length ? ownHoldings : (carriedHoldings?.value ?? 0);
+    const holdingsAsOf = imp.holdings.length ? period : (carriedHoldings?.asOf ?? null);
     const portfolioValue = r2(cash + holdingsValue);
 
     const inMonth = txs.filter((t: any) => t.tradeDate >= monthStart && t.tradeDate <= end);
@@ -153,7 +174,7 @@ export async function monthlySeries(db: Db, accountId: bigint): Promise<MonthRow
       if (Math.abs(denom) > 0.01) returnPct = r4((portfolioValue - start - contributions) / denom);
     }
 
-    rows.push({ period, periodEnd: end.toISOString().slice(0, 10), cash, holdingsValue, portfolioValue, contributions, income, dividends, tax, rewards, fees, gain, returnPct, cashCorrected });
+    rows.push({ period, periodEnd: end.toISOString().slice(0, 10), cash, holdingsValue, portfolioValue, contributions, income, dividends, tax, rewards, fees, gain, returnPct, cashCorrected, holdingsAsOf });
     prevValue = portfolioValue;
     prevCash = cash;
     prevStatedClose = statedCash;
@@ -195,8 +216,12 @@ export function yearlyFromMonths(months: MonthRow[]): YearRow[] {
  * out steadily.
  */
 export async function stockReport(db: Db, accountId: bigint): Promise<StockRow[]> {
+  // The latest import that actually CARRIES holdings, not simply the latest.
+  // IPOT's monthly statement is a cash ledger with no holdings at all, so
+  // "most recent import" returned an empty position list for an account holding
+  // Rp 2.2 billion of shares.
   const latest = await db.statementImport.findFirst({
-    where: { accountId, status: 'ok', periodEnd: { not: null } },
+    where: { accountId, status: 'ok', periodEnd: { not: null }, holdings: { some: {} } },
     orderBy: { periodEnd: 'desc' },
     include: { holdings: { include: { security: true } } },
   });
@@ -329,6 +354,12 @@ export async function benchmarkMonthly(db: Db, accountId: bigint, symbol = 'SPY'
   return out;
 }
 
+function monthsBetween(from: string, to: string): number {
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  return Math.max(0, (ty - fy) * 12 + (tm - fm));
+}
+
 /** Chain monthly returns, then express per year. n months of r -> (1+r)^(12/n) - 1. */
 export function annualise(monthlyReturns: (number | null)[]): number | null {
   const rs = monthlyReturns.filter((r): r is number => r !== null);
@@ -404,6 +435,10 @@ export interface Overview {
   /** Largest single holding as a share of the account — the concentration risk. */
   topWeightPct: number | null;
   topSymbol: string | null;
+  /** Month the share prices actually come from, and how far behind that is.
+   *  Zero for an account whose statements carry holdings every month. */
+  holdingsAsOf: string | null;
+  holdingsStaleMonths: number;
 }
 
 export function overviewFrom(months: MonthRow[], bench: Map<string, number>, stocks: StockRow[] = []): Overview | null {
@@ -458,6 +493,8 @@ export function overviewFrom(months: MonthRow[], bench: Map<string, number>, sto
     dividendYield: latest.portfolioValue > 0 && dividends12m > 0 ? r4(dividends12m / latest.portfolioValue) : null,
     topWeightPct: top ? top.weightPct : null,
     topSymbol: top ? top.symbol : null,
+    holdingsAsOf: latest.holdingsAsOf,
+    holdingsStaleMonths: latest.holdingsAsOf ? monthsBetween(latest.holdingsAsOf, latest.period) : 0,
   };
 }
 
@@ -793,7 +830,7 @@ export function combinePortfolios(series: { name: string; months: MonthRow[] }[]
       cash: r2(cash), holdingsValue: r2(holdings), portfolioValue: r2(value),
       contributions: r2(contributions), income: r2(income),
       dividends: r2(dividends), tax: r2(tax), rewards: r2(rewards),
-      fees: 0, cashCorrected: false, gain, returnPct,
+      fees: 0, cashCorrected: false, holdingsAsOf: null, gain, returnPct,
     });
     prevValue = value;
   }

@@ -17,12 +17,13 @@ const RED = '#a8071a';
 
 export function AccountDashboard({
   accountId, accountName, provider, currency, accountNo,
-  overview, stocks, months, thisYear, thisYearMonths, yearStocks, irr, irrYears, years, asAt, missing, failed,
+  overview, stocks, months, thisYear, thisYearMonths, yearStocks, irr, irrYears, years, asAt, missing, failed, holdings,
 }: {
   accountId: string; accountName: string; provider: string; currency: string; accountNo: string | null;
   overview: Overview | null; stocks: StockRow[]; months: MonthRow[];
   thisYear: YearVsBench | null; thisYearMonths: MonthRow[];
   yearStocks: StockYearRow[]; irr: number | null; irrYears: YearIrr[]; years: YearVsBench[];
+  holdings?: { asOf: string; staleMonths: number } | null;
   asAt: { period: string; monthsBehind: number } | null;
   missing: string[]; failed: { fileName: string; reason: string }[];
 }) {
@@ -44,7 +45,7 @@ export function AccountDashboard({
         <StatementUploadButton accountId={accountId} />
       </div>
 
-      <DataHealthAlert missing={missing} failed={failed} asAt={asAt} />
+      <DataHealthAlert missing={missing} failed={failed} asAt={asAt} holdings={holdings} />
 
       {!overview ? (
         <Alert type="info" showIcon message="No statements yet"

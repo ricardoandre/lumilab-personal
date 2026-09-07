@@ -79,6 +79,7 @@ export default async function AccountDashboardPage({ params }: { params: Promise
       asAt={asAt}
       missing={missing}
       failed={failed}
+      holdings={overview && overview.holdingsAsOf ? { asOf: overview.holdingsAsOf, staleMonths: overview.holdingsStaleMonths } : null}
     />
   );
 }
