@@ -698,3 +698,153 @@ export async function yearlyIrr(db: Db, accountId: bigint, months: MonthRow[]): 
   }
   return out;
 }
+
+// ─────────────────────────── combined across accounts ─────────────────────────
+
+export interface CombinedYear {
+  year: string;
+  startValue: number;
+  endValue: number;
+  contributions: number;
+  gain: number;
+  returnPct: number | null;
+}
+
+export interface CombinedPortfolio {
+  months: MonthRow[];
+  years: CombinedYear[];
+  totalValue: number;
+  totalContributions: number;
+  totalGain: number;
+  simpleReturn: number | null;
+  annualised: number | null;
+  irr: number | null;
+  firstPeriod: string | null;
+  lastPeriod: string | null;
+  /** Accounts whose latest statement is older than the newest — their stale
+   *  values are still counted, so the caller can say so. */
+  asOfByAccount: { name: string; period: string }[];
+}
+
+/**
+ * Roll several accounts into one portfolio.
+ *
+ * Accounts do not share a timeline — one may start in April 2021, another in
+ * May, and their latest statements can differ by a month. For any given month
+ * each account contributes its most recent value AT OR BEFORE that month, so an
+ * account that has not been updated yet holds its last known value rather than
+ * dropping to zero and inventing a crash across the whole portfolio.
+ */
+export function combinePortfolios(series: { name: string; months: MonthRow[] }[]): CombinedPortfolio {
+  const withData = series.filter((s) => s.months.length > 0);
+  if (!withData.length) {
+    return {
+      months: [], years: [], totalValue: 0, totalContributions: 0, totalGain: 0,
+      simpleReturn: null, annualised: null, irr: null,
+      firstPeriod: null, lastPeriod: null, asOfByAccount: [],
+    };
+  }
+
+  const allPeriods = [...new Set(withData.flatMap((s) => s.months.map((m) => m.period)))].sort();
+
+  const merged: MonthRow[] = [];
+  let prevValue: number | null = null;
+
+  for (const period of allPeriods) {
+    let value = 0;
+    let cash = 0;
+    let holdings = 0;
+    let contributions = 0;
+    let income = 0;
+    let dividends = 0;
+    let tax = 0;
+    let rewards = 0;
+
+    for (const s of withData) {
+      // Latest month at or before this one — a gap must not read as zero.
+      let latest: MonthRow | null = null;
+      for (const m of s.months) {
+        if (m.period <= period) latest = m; else break;
+      }
+      if (!latest) continue;
+      value += latest.portfolioValue;
+      cash += latest.cash;
+      holdings += latest.holdingsValue;
+
+      const own = s.months.find((m) => m.period === period);
+      if (own) {
+        contributions += own.contributions;
+        income += own.income;
+        dividends += own.dividends;
+        tax += own.tax;
+        rewards += own.rewards;
+      }
+    }
+
+    const gain = prevValue === null ? 0 : r2(value - prevValue - contributions);
+    const returnPct =
+      prevValue !== null && prevValue + contributions > 0
+        ? r4((value - prevValue - contributions) / (prevValue + contributions / 2))
+        : null;
+
+    merged.push({
+      period,
+      periodEnd: `${period}-01`,
+      cash: r2(cash), holdingsValue: r2(holdings), portfolioValue: r2(value),
+      contributions: r2(contributions), income: r2(income),
+      dividends: r2(dividends), tax: r2(tax), rewards: r2(rewards),
+      fees: 0, cashCorrected: false, gain, returnPct,
+    });
+    prevValue = value;
+  }
+
+  const byYear = new Map<string, MonthRow[]>();
+  for (const m of merged) {
+    const y = m.period.slice(0, 4);
+    if (!byYear.has(y)) byYear.set(y, []);
+    byYear.get(y)!.push(m);
+  }
+  const years: CombinedYear[] = [...byYear.entries()].sort().map(([year, ms]) => {
+    const idx = merged.indexOf(ms[0]);
+    const startValue = idx > 0 ? merged[idx - 1].portfolioValue : 0;
+    const endValue = ms[ms.length - 1].portfolioValue;
+    const contributions = r2(ms.reduce((a, m) => a + m.contributions, 0));
+    const gain = r2(ms.reduce((a, m) => a + m.gain, 0));
+    const rs = ms.map((m) => m.returnPct).filter((r): r is number => r !== null);
+    return {
+      year, startValue, endValue, contributions, gain,
+      returnPct: rs.length ? r4(rs.reduce((acc, r) => acc * (1 + r), 1) - 1) : null,
+    };
+  });
+
+  const latest = merged[merged.length - 1];
+  const totalContributions = r2(merged.reduce((a, m) => a + m.contributions, 0));
+  const totalGain = r2(merged.reduce((a, m) => a + m.gain, 0));
+
+  return {
+    months: merged,
+    years,
+    totalValue: latest.portfolioValue,
+    totalContributions,
+    totalGain,
+    simpleReturn: totalContributions > 0 ? r4(totalGain / totalContributions) : null,
+    annualised: annualise(merged.map((m) => m.returnPct)),
+    irr: null, // filled by the caller, which has the real transaction dates
+    firstPeriod: merged[0].period,
+    lastPeriod: latest.period,
+    asOfByAccount: withData.map((s) => ({ name: s.name, period: s.months[s.months.length - 1].period })),
+  };
+}
+
+/** IRR across every account at once: all deposits, one closing value. */
+export async function combinedIrr(db: Db, accountIds: bigint[], totalValue: number, asOf: Date): Promise<number | null> {
+  const flows = await db.transaction.findMany({
+    where: { accountId: { in: accountIds }, type: { in: ['DEPOSIT', 'WITHDRAWAL', 'JOURNAL'] } },
+    orderBy: { tradeDate: 'asc' },
+    select: { tradeDate: true, netAmount: true },
+  });
+  if (!flows.length) return null;
+  const cf: CashFlow[] = flows.map((f: any) => ({ date: f.tradeDate as Date, amount: -num(f.netAmount) }));
+  cf.push({ date: asOf, amount: totalValue });
+  return xirr(cf);
+}

@@ -118,7 +118,7 @@ if (!signedIn) {
 
 // 2. the screens
 for (const [name, path, expect] of [
-  ['dashboard', '/', 'Overview'],
+  ['dashboard', '/', 'Total net worth'],
   ['accounts', '/accounts', 'Andre Gotrade'],
   ['account dashboard', '/accounts/1', 'so far'],
   ['my account', '/account', 'Change password'],

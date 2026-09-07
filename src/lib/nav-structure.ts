@@ -15,8 +15,13 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Accounts',
     entries: [
-      { label: 'Account list', href: '/accounts' },
-      { label: 'Projection', href: '/accounts/projection' },
+      {
+        label: 'All Accounts',
+        items: [
+          { label: 'Account list', href: '/accounts' },
+          { label: 'Projection', href: '/accounts/projection' },
+        ],
+      },
     ],
   },
 ];
