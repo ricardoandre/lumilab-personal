@@ -11,7 +11,7 @@ interface Result {
   periodLabel: string | null; rowsInserted: number; holdings: number; error?: string;
 }
 
-export function StatementUpload({ accountId, onDone }: { accountId: string; onDone?: () => void }) {
+export function StatementUpload({ accountId, provider, onDone }: { accountId: string; provider?: string; onDone?: () => void }) {
   const { message } = App.useApp();
   const router = useRouter();
   const [files, setFiles] = useState<UploadFile[]>([]);
@@ -46,7 +46,7 @@ export function StatementUpload({ accountId, onDone }: { accountId: string; onDo
     <>
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          Drop your Gotrade monthly statement PDFs here — as many at once as you like.
+          Drop your {provider ?? 'monthly'} statement PDFs here — as many at once as you like.
           Uploading the same month twice is safe: it is recognised and skipped.
         </Typography.Paragraph>
 

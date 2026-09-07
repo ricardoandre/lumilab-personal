@@ -47,7 +47,7 @@ export function AccountDashboard({
             {accountNo && <Typography.Text type="secondary" style={{ fontSize: 12 }}>#{accountNo}</Typography.Text>}
           </Space>
         </div>
-        <StatementUploadButton accountId={accountId} />
+        <StatementUploadButton accountId={accountId} provider={provider} />
       </div>
 
       <DataHealthAlert missing={missing} failed={failed} asAt={asAt} holdings={holdings} />
@@ -59,12 +59,16 @@ export function AccountDashboard({
         <>
           <AccountStats overview={overview} stocks={stocks} years={years} irr={irr} irrYears={irrYears} />
 
-          <Card size={size}>
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Against just buying SPY: you <Pct v={overview.annualised} /> a year, SPY{' '}
-              <Pct v={overview.benchAnnualised} /> a year.
-            </Typography.Text>
-          </Card>
+          {/* Only where a benchmark exists. An Indonesian account has no SPY to
+              compare with, and the card read "SPY — a year". */}
+          {overview.benchAnnualised !== null && (
+            <Card size={size}>
+              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                Against just buying SPY: you <Pct v={overview.annualised} /> a year, SPY{' '}
+                <Pct v={overview.benchAnnualised} /> a year.
+              </Typography.Text>
+            </Card>
+          )}
 
           <ConcentrationCard overview={overview} stocks={stocks} />
 

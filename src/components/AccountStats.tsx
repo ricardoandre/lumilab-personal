@@ -41,6 +41,15 @@ export function AccountStats({
 
   // Breakdown lists are ordered by RETURN, best first — the ranking is the point
   // of opening them, and alphabetical order says nothing.
+  /**
+   * A time-weighted return needs a valuation every month. IPOT's statements
+   * carry no prices, so months between portfolio exports hold the last known
+   * one — chaining those produces a confident figure with nothing behind it
+   * (-6.44% a year on an account that has roughly tripled). Suppressed rather
+   * than shown, with IRR left as the honest annual rate.
+   */
+  const annualisedTrustworthy = overview.holdingsStaleMonths < 2;
+
   const byReturn = [...stocks].sort((a, b) => (b.returnPct ?? -Infinity) - (a.returnPct ?? -Infinity));
   const byMoney = [...stocks].sort((a, b) => b.totalReturn - a.totalReturn);
   const screens = Grid.useBreakpoint();

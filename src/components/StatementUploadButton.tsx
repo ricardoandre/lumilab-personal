@@ -12,7 +12,7 @@ import { StatementUpload } from './StatementUpload';
  * daily job. A drawer keeps the action reachable without spending the top of a
  * phone screen on it.
  */
-export function StatementUploadButton({ accountId }: { accountId: string }) {
+export function StatementUploadButton({ accountId, provider }: { accountId: string; provider?: string }) {
   const [open, setOpen] = useState(false);
   const screens = Grid.useBreakpoint();
   return (
@@ -29,7 +29,7 @@ export function StatementUploadButton({ accountId }: { accountId: string }) {
         placement={screens.lg ? 'right' : 'bottom'}
         destroyOnHidden={false}
       >
-        <StatementUpload accountId={accountId} onDone={() => undefined} />
+        <StatementUpload accountId={accountId} provider={provider} onDone={() => undefined} />
       </Drawer>
     </>
   );
