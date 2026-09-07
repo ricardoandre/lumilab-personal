@@ -65,7 +65,9 @@ export function YearMetrics({
               <BreakdownLine label="Dividends received" value={<Money v={year.income} zeroDim />} />
               <BreakdownLine label="Everything else is price movement" value={<Money v={year.gain - year.income} />} />
               <BreakdownLine label={`Earned in ${year.year}`} value={<Money v={year.gain} />} strong divider />
-              <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>By stock — most earned first</div>
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '2px solid #e7e2d9', marginBottom: 4, fontWeight: 600 }}>
+                By stock — most earned first
+              </div>
               {byYearMoney.map((s) => (
                 <BreakdownLine key={s.symbol} label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
                   note={s.startValue === 0 ? 'bought this year' : undefined}
@@ -84,7 +86,9 @@ export function YearMetrics({
               <BreakdownLine label="You" value={<Pct v={year.returnPct} bold />} />
               <BreakdownLine label="SPY, same months" value={<Pct v={year.benchmarkPct} />} />
               <BreakdownLine label="Difference" value={<Pct v={year.vsBenchmark} />} divider />
-              <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>By stock — best first</div>
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '2px solid #e7e2d9', marginBottom: 4, fontWeight: 600 }}>
+                By stock — best first
+              </div>
               {byYearReturn.map((s) => (
                 <BreakdownLine key={s.symbol} label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
                   note={s.netTraded > 0 ? `${usd(s.netTraded)} bought this year` : undefined}

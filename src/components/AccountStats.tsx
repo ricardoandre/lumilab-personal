@@ -54,12 +54,6 @@ export function AccountStats({
               drawerTitle="Money you put in"
               breakdown={
                 <BreakdownStack>
-                  <BreakdownNote>
-                    Everything you have paid into this account since{' '}
-                    {monthName(overview.investedSince) ?? 'the beginning'}. Gotrade&apos;s promotional
-                    credits count here as money paid in, not as return, so a broker giveaway cannot
-                    flatter how your own capital performed.
-                  </BreakdownNote>
                   {years && years.length > 0 && (
                     <>
                       <div style={{ marginTop: 16, marginBottom: 4, fontWeight: 600 }}>Paid in, year by year</div>
@@ -96,10 +90,6 @@ export function AccountStats({
                       more on that one holding than on everything else combined.
                     </BreakdownNote>
                   )}
-                  <BreakdownNote>
-                    Share prices are those printed on your latest statement — the only price source
-                    there is, since Gotrade has no API.
-                  </BreakdownNote>
                 </BreakdownStack>
               } />
           ) : plain('Portfolio value', usd(overview.latestValue))}
@@ -136,6 +126,11 @@ export function AccountStats({
               drawerTitle="Total return"
               breakdown={
                 <BreakdownStack>
+                  <BreakdownNote>
+                    What your money grew by: everything it is worth now, against everything you put in.
+                    <Formula>(Portfolio value − Money invested) ÷ Money invested</Formula>
+                  </BreakdownNote>
+                  <div style={{ marginTop: 16 }} />
                   <BreakdownLine label="Money in" value={<Money v={overview.contributions} />} />
                   <BreakdownLine label="Worth today" value={<Money v={overview.latestValue} />} />
                   <BreakdownLine label="Earned" value={<Money v={overview.gain} />} strong divider />
@@ -146,16 +141,7 @@ export function AccountStats({
                       label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
                       value={<Pct v={s.returnPct} />} />
                   ))}
-                  <BreakdownNote>
-                    <strong>How this is worked out:</strong> what you have now, minus what you put
-                    in, divided by what you put in. Nothing more. It is the figure Gotrade&apos;s own
-                    app shows.
-                    <br /><br />
-                    It has one blind spot: money paid in last month counts in full, even though it
-                    has had no time to grow. So a portfolio you are actively adding to will always
-                    look worse on this measure than it really is. &quot;Return a year&quot; is the
-                    one that corrects for that.
-                  </BreakdownNote>
+
                 </BreakdownStack>
               } />
           ) : plain('Total return', pct(overview.simpleReturn), (overview.simpleReturn ?? 0) >= 0 ? GREEN : RED)}
@@ -168,14 +154,14 @@ export function AccountStats({
               breakdown={
                 <BreakdownStack>
                   <BreakdownNote>
-                    This measures the investments, not your timing. Each month is scored on its own —
-                    how much the pot moved, ignoring anything you paid in that month — and the months
-                    are then multiplied together. Because deposits are stripped out, this is the only
-                    figure that can fairly be set beside SPY, which has no deposits at all.
+                    How the investments themselves performed each year on average, with your deposits
+                    stripped out so paying money in never looks like a gain.
+                    <Formula>{`Each month:  (End − Start − Paid in) ÷ (Start + Paid in × days invested)
+Then:        multiply every month together, and annualise`}</Formula>
                   </BreakdownNote>
                   <div style={{ marginTop: 16 }} />
                   <BreakdownLine label="You" value={<Pct v={overview.annualised} bold />} />
-                  <BreakdownLine label="SPY, same months" value={<Pct v={overview.benchAnnualised} />} />
+                  <BreakdownLine label="SPY over the same period" value={<Pct v={overview.benchAnnualised} />} />
                   <BreakdownLine label="Whole period" value={<Pct v={overview.sinceInception} />} divider />
 
                   {years && years.length > 0 && (
@@ -183,7 +169,15 @@ export function AccountStats({
                       <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>Year by year</div>
                       {[...years].reverse().map((y) => (
                         <BreakdownLine key={y.year} label={y.year}
-                          note={`SPY ${y.benchmarkPct === null ? '—' : `${(y.benchmarkPct * 100).toFixed(2)}%`}`}
+                          note={
+                            y.benchmarkPct === null
+                              ? undefined
+                              : `SPY ${(y.benchmarkPct * 100).toFixed(2)}% · you ${
+                                  y.vsBenchmark === null
+                                    ? ''
+                                    : `${y.vsBenchmark >= 0 ? '+' : ''}${(y.vsBenchmark * 100).toFixed(2)}% vs SPY`
+                                }`
+                          }
                           value={<Pct v={y.returnPct} />} />
                       ))}
                     </>
@@ -202,14 +196,15 @@ export function AccountStats({
               breakdown={
                 <BreakdownStack>
                   <BreakdownNote>
-                    Picture every deposit you made growing at one steady rate. IRR is the rate that
-                    would land you exactly on today&apos;s balance — so unlike &quot;return a
-                    year&quot;, it rewards good timing and punishes bad.
+                    The one steady rate that would turn your actual deposits, on the dates you made
+                    them, into today&apos;s balance — so unlike the others, it rewards good timing.
+                    <Formula>{`Find the rate r where:
+Σ  each deposit ÷ (1 + r) ^ years since that deposit  =  Portfolio value today`}</Formula>
                   </BreakdownNote>
                   <div style={{ marginTop: 16 }} />
                   <BreakdownLine label="Your money's rate (IRR)" value={<Pct v={irr ?? null} bold />} />
-                  <BreakdownLine label="The investments' rate" value={<Pct v={overview.annualised} />} />
-                  <BreakdownLine label="SPY, same months" value={<Pct v={overview.benchAnnualised} />} divider />
+                  <BreakdownLine label="Annualised return" value={<Pct v={overview.annualised} />} />
+                  <BreakdownLine label="SPY over the same period" value={<Pct v={overview.benchAnnualised} />} divider />
                   {irrYears && irrYears.length > 0 && (
                     <>
                       <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>Year by year</div>
@@ -265,5 +260,16 @@ export function AccountStats({
         Invested since {monthName(overview.investedSince) ?? '—'} · figures as at {monthName(overview.lastPeriod) ?? '—'}
       </Typography.Text>
     </>
+  );
+}
+
+/** A formula, set apart from the sentence above it. */
+function Formula({ children }: { children: React.ReactNode }) {
+  return (
+    <pre style={{
+      margin: '8px 0 0', padding: '8px 10px', background: '#f5f3ee', borderRadius: 6,
+      fontSize: 11.5, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: '#3f3a33',
+    }}>{children}</pre>
   );
 }
