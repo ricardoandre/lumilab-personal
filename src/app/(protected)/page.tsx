@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/require-user';
 import { usdToIdr } from '@/lib/fx';
 import { goldPrice } from '@/lib/gold';
 import { goldOverview, type GoldOverview } from '@/lib/gold/report';
+import { livePortfolio } from '@/lib/ipot/positions';
 import {
   monthlySeries, benchmarkMonthly, overviewFrom, combinePortfolios, combinedIrr,
   accountIrr, project, contributionPace, stockReport,
@@ -38,6 +39,18 @@ export default async function DashboardPage() {
       monthlySeries(prisma, a.id), benchmarkMonthly(prisma, a.id), stockReport(prisma, a.id),
     ]);
     const overview = overviewFrom(months, bench, stocks);
+
+    // Same market pricing the account page uses, or the two disagree: the
+    // dashboard read Rp 5.30 bn while the account itself said Rp 1.49 bn.
+    const live = await livePortfolio(a.id);
+    if (live && overview && live.positions.length) {
+      overview.latestValue = live.totalValue;
+      overview.cash = live.cash;
+      overview.holdingsValue = live.holdingsValue;
+      overview.gain = r2(live.totalValue - overview.contributions);
+      overview.simpleReturn = overview.contributions > 0 ? overview.gain / overview.contributions : null;
+    }
+
     const irr = overview && months.length
       ? await accountIrr(prisma, a.id, overview.latestValue, new Date(months[months.length - 1].periodEnd))
       : null;

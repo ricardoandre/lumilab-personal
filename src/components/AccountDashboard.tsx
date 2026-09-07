@@ -17,13 +17,14 @@ const RED = '#a8071a';
 
 export function AccountDashboard({
   accountId, accountName, provider, currency, accountNo,
-  overview, stocks, months, thisYear, thisYearMonths, yearStocks, irr, irrYears, years, asAt, missing, failed, holdings,
+  overview, stocks, months, thisYear, thisYearMonths, yearStocks, irr, irrYears, years, asAt, missing, failed, holdings, livePricing,
 }: {
   accountId: string; accountName: string; provider: string; currency: string; accountNo: string | null;
   overview: Overview | null; stocks: StockRow[]; months: MonthRow[];
   thisYear: YearVsBench | null; thisYearMonths: MonthRow[];
   yearStocks: StockYearRow[]; irr: number | null; irrYears: YearIrr[]; years: YearVsBench[];
   holdings?: { asOf: string; staleMonths: number } | null;
+  livePricing?: { anchoredAt: string | null; pricedAt: string | null; stale: boolean; trades: number } | null;
   asAt: { period: string; monthsBehind: number } | null;
   missing: string[]; failed: { fileName: string; reason: string }[];
 }) {
@@ -51,6 +52,26 @@ export function AccountDashboard({
       </div>
 
       <DataHealthAlert missing={missing} failed={failed} asAt={asAt} holdings={holdings} />
+
+      {livePricing && (
+        <Alert
+          type="info"
+          showIcon
+          message={`Valued at today's market prices${livePricing.pricedAt ? ` — checked ${livePricing.pricedAt}` : ''}`}
+          description={
+            <>
+              This broker&apos;s statement carries no share prices, so the position is built from the
+              holdings report of {livePricing.anchoredAt}
+              {livePricing.trades > 0 && <> plus the {livePricing.trades} trade{livePricing.trades === 1 ? '' : 's'} since</>}
+              , and priced at market.
+              {' '}A stock split moves no cash and so never appears on a statement — if one has
+              happened since {livePricing.anchoredAt}, it would not be reflected here. Uploading a
+              newer holdings report re-anchors it.
+              {livePricing.stale && ' Live prices were unavailable; showing the last ones fetched.'}
+            </>
+          }
+        />
+      )}
 
       {!overview ? (
         <Alert type="info" showIcon message="No statements yet"

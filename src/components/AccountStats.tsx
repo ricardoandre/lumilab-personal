@@ -163,11 +163,21 @@ export function AccountStats({
         </Col>
         <Col xs={12} lg={6}>
           {clickable ? (
-            <StatCard small={small} title="Return a year" value={pct(overview.annualised)}
-              valueColor={(overview.annualised ?? 0) >= 0 ? GREEN : RED}
+            <StatCard small={small} title="Return a year"
+              value={annualisedTrustworthy ? pct(overview.annualised) : '—'}
+              valueColor={annualisedTrustworthy && (overview.annualised ?? 0) >= 0 ? GREEN : RED}
               drawerTitle="Return a year"
               breakdown={
                 <BreakdownStack>
+                  {!annualisedTrustworthy && (
+                    <BreakdownNote>
+                      <strong>Not shown for this account.</strong> A yearly return needs a valuation
+                      every month, and this broker&apos;s statements carry no share prices — the
+                      months between holdings reports hold the last known price. Chaining those
+                      produces a confident figure with nothing behind it. Today&apos;s value IS
+                      live-priced; only the month-by-month history is not. Use IRR instead.
+                    </BreakdownNote>
+                  )}
                   <BreakdownNote>
                     How the investments themselves performed each year on average, with your deposits
                     stripped out so paying money in never looks like a gain.

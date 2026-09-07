@@ -7,6 +7,7 @@ import {
   missingMonths, failedImports, stockYearReport, accountIrr, yearlyIrr,
 } from '@/lib/gotrade/report';
 import { AccountDashboard } from '@/components/AccountDashboard';
+import { livePortfolio } from '@/lib/ipot/positions';
 import { loadAccount } from '@/lib/account-page';
 
 export const dynamic = 'force-dynamic';
@@ -51,7 +52,28 @@ export default async function AccountDashboardPage({ params }: { params: Promise
       })()
     : null;
 
+  /**
+   * Where a broker's statement carries no prices, value the position at MARKET
+   * instead of at the last snapshot. Verified against Andre's live IPOT app on
+   * 2026-09-07: all seven positions matched to the share.
+   */
+  const live = await livePortfolio(accountId);
   const overview = overviewFrom(months, bench, stocks);
+  if (live && overview && live.positions.length) {
+    overview.latestValue = live.totalValue;
+    overview.cash = live.cash;
+    overview.holdingsValue = live.holdingsValue;
+    overview.cashPct = live.totalValue > 0 ? live.cash / live.totalValue : 0;
+    overview.gain = Math.round((live.totalValue - overview.contributions) * 100) / 100;
+    overview.simpleReturn = overview.contributions > 0 ? overview.gain / overview.contributions : null;
+    // Deliberately NOT clearing the staleness flags. Today's value is now
+    // known, but the MONTHLY HISTORY still carries December 2023 prices — there
+    // is no source of historical IDX prices here — so a time-weighted return
+    // chained over those months remains meaningless and must stay suppressed.
+    // Clearing them let "-5.64% a year" back onto an account that has grown.
+    overview.topSymbol = live.positions[0]?.symbol ?? null;
+    overview.topWeightPct = live.positions[0]?.weightPct ?? null;
+  }
   const [yearStocks, irr, irrYears] = await Promise.all([
     latestYear ? stockYearReport(prisma, accountId, latestYear.year) : Promise.resolve([]),
     overview
@@ -68,9 +90,24 @@ export default async function AccountDashboardPage({ params }: { params: Promise
       currency={account.currency}
       accountNo={account.externalAccountNo}
       overview={overview}
-      stocks={stocks}
+      stocks={live && live.positions.length
+        ? live.positions.map((pos) => ({
+            symbol: pos.symbol, name: pos.name, quantity: pos.quantity,
+            costBasis: pos.costBasis, marketValue: pos.marketValue,
+            unrealized: pos.unrealized, dividends: 0, totalReturn: pos.unrealized,
+            returnPct: pos.returnPct, heldSince: null, heldYears: null,
+            annualisedPct: null, weightPct: pos.weightPct, dividendYield: null,
+          }))
+        : stocks}
       months={months}
-      thisYear={latestYear}
+      thisYear={
+        latestYear && live && live.positions.length
+          // The current year ENDS at today's real value, not at a month-end
+          // carried forward from a two-year-old price sheet.
+          ? { ...latestYear, endValue: live.totalValue,
+              gain: Math.round((live.totalValue - latestYear.startValue - latestYear.contributions) * 100) / 100 }
+          : latestYear
+      }
       thisYearMonths={thisYearMonths.length >= 2 ? thisYearMonths : months.slice(-12)}
       yearStocks={yearStocks}
       irr={irr}
@@ -80,6 +117,9 @@ export default async function AccountDashboardPage({ params }: { params: Promise
       missing={missing}
       failed={failed}
       holdings={overview && overview.holdingsAsOf ? { asOf: overview.holdingsAsOf, staleMonths: overview.holdingsStaleMonths } : null}
+      livePricing={live && live.positions.length
+        ? { anchoredAt: live.anchoredAt, pricedAt: live.pricedAt, stale: live.pricesStale, trades: live.tradesSinceAnchor }
+        : null}
     />
   );
 }
