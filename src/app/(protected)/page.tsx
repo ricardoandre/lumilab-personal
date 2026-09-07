@@ -55,15 +55,36 @@ export default async function DashboardPage() {
     ? await combinedIrr(prisma, withData.map((p) => p.account.id), combined.totalValue, asOf)
     : null;
 
+  /**
+   * Convert to rupiah ONLY when the account is not already in rupiah.
+   *
+   * Converting unconditionally multiplied IPOT's Rp 2.33 billion by the dollar
+   * rate and reported a net worth of Rp 41 TRILLION. The currency has to be
+   * asked for per account; assuming every account is USD held only while every
+   * account happened to be.
+   */
+  const inIdr = (amount: number, currency: string) =>
+    currency === 'IDR' ? r2(amount) : rate === null ? 0 : r2(amount * rate);
   const toIdr = (usd: number) => (rate === null ? 0 : r2(usd * rate));
+
+  const perAccountTotals = withData.reduce(
+    (acc, p) => ({
+      value: acc.value + inIdr(p.overview!.latestValue, p.account.currency),
+      invested: acc.invested + inIdr(p.overview!.contributions, p.account.currency),
+      gain: acc.gain + inIdr(p.overview!.gain, p.account.currency),
+    }),
+    { value: 0, invested: 0, gain: 0 },
+  );
 
   const goldIdr = gold.reduce((a, g) => a + g.data.valueNow, 0);
   const goldInvested = gold.reduce((a, g) => a + g.data.invested, 0);
   const goldGain = gold.reduce((a, g) => a + g.data.gain, 0);
 
-  const totalIdr = toIdr(combined.totalValue) + goldIdr;
-  const investedIdr = toIdr(combined.totalContributions) + goldInvested;
-  const gainIdr = toIdr(combined.totalGain) + goldGain;
+  // Summed per account rather than from the combined series, which is in mixed
+  // units and cannot be converted with one rate.
+  const totalIdr = r2(perAccountTotals.value + goldIdr);
+  const investedIdr = r2(perAccountTotals.invested + goldInvested);
+  const gainIdr = r2(perAccountTotals.gain + goldGain);
 
   // Per-account rows, everything in rupiah so the drawers compare like with like.
   const perAccount: AccountBreakdown[] = [
@@ -71,10 +92,10 @@ export default async function DashboardPage() {
       id: String(p.account.id),
       name: p.account.name,
       currency: p.account.currency,
-      valueIdr: toIdr(p.overview!.latestValue),
+      valueIdr: inIdr(p.overview!.latestValue, p.account.currency),
       valueNative: p.overview!.latestValue,
-      investedIdr: toIdr(p.overview!.contributions),
-      gainIdr: toIdr(p.overview!.gain),
+      investedIdr: inIdr(p.overview!.contributions, p.account.currency),
+      gainIdr: inIdr(p.overview!.gain, p.account.currency),
       simpleReturn: p.overview!.simpleReturn,
       annualised: p.overview!.annualised,
       irr: p.irr,
@@ -120,8 +141,8 @@ export default async function DashboardPage() {
           const own = p.months.filter((m) => m.period.startsWith(y.year));
           return {
             name: p.account.name,
-            investedIdr: toIdr(own.reduce((a, m) => a + m.contributions, 0)),
-            gainIdr: toIdr(own.reduce((a, m) => a + m.gain, 0)),
+            investedIdr: inIdr(own.reduce((a, m) => a + m.contributions, 0), p.account.currency),
+            gainIdr: inIdr(own.reduce((a, m) => a + m.gain, 0), p.account.currency),
           };
         }),
         ...gold.map((g) => ({
@@ -135,16 +156,18 @@ export default async function DashboardPage() {
 
   // PROJECTION now includes gold, projected at its OWN rate. Growing everything
   // at the investments' rate would have quietly assumed gold behaves like SPY.
-  const investPace = toIdr(contributionPace(combined.months));
+  // Contribution pace summed per account, for the same mixed-unit reason.
+  const investPace = withData.reduce(
+    (a, p) => a + inIdr(contributionPace(p.months), p.account.currency), 0);
   const goldPace = gold.length && gold[0].data.firstPurchase
     ? goldInvested / Math.max(1, (Date.now() - new Date(gold[0].data.firstPurchase).getTime()) / (365.25 * 24 * 3600 * 1000))
     : 0;
   const goldRate = gold.length ? gold[0].data.irr ?? gold[0].data.annualised : null;
 
   const projections = [5, 10].map((yrs) => {
-    const invStop = project(toIdr(combined.totalValue), combined.annualised, 0)
+    const invStop = project(perAccountTotals.value, combined.annualised, 0)
       .find((p) => p.years === yrs);
-    const invKeep = project(toIdr(combined.totalValue), combined.annualised, investPace)
+    const invKeep = project(perAccountTotals.value, combined.annualised, investPace)
       .find((p) => p.years === yrs);
     const goldStop = project(goldIdr, goldRate, 0).find((p) => p.years === yrs);
     const goldKeep = project(goldIdr, goldRate, goldPace).find((p) => p.years === yrs);
@@ -158,7 +181,7 @@ export default async function DashboardPage() {
   return (
     <HomeDashboard
       totalIdr={rate === null ? null : totalIdr}
-      investmentsIdr={toIdr(combined.totalValue)}
+      investmentsIdr={perAccountTotals.value}
       investmentsUsd={combined.totalValue}
       goldIdr={goldIdr}
       investedIdr={rate === null ? null : investedIdr}
