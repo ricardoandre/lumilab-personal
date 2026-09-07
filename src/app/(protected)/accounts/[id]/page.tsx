@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import '@/engine.server';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/require-user';
@@ -16,6 +16,10 @@ export default async function AccountDashboardPage({ params }: { params: Promise
   const { id } = await params;
   const { accountId, account } = await loadAccount(id);
   if (!account) notFound();
+
+  // Gold has no statements — its dashboard is a different shape entirely, so
+  // send it there rather than rendering an empty statement view.
+  if (account.kind === 'COMMODITY') redirect(`/accounts/${id}/gold`);
 
   const [months, bench, stocks, missing, failed] = await Promise.all([
     monthlySeries(prisma, accountId),

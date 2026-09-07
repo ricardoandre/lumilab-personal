@@ -1,6 +1,6 @@
 import '@/engine.server';
 import { requireUser } from '@/lib/require-user';
-import { ChangePasswordForm } from '@/components/ChangePasswordForm';
+import { ChangePasswordForm } from '@lumilab/engine/ui/ChangePasswordForm';
 
 export const dynamic = 'force-dynamic';
 

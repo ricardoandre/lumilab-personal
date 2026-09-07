@@ -17,7 +17,7 @@ export function NavAccounts() {
     let cancelled = false;
     fetch('/api/nav-accounts')
       .then((r) => (r.ok ? r.json() : { accounts: [] }))
-      .then((d: { accounts: { id: string; name: string }[] }) => {
+      .then((d: { accounts: { id: string; name: string; kind: string }[] }) => {
         if (cancelled || !d.accounts?.length) return;
         const groups = NAV_GROUPS.map((g) =>
           g.label === 'Accounts'
@@ -35,23 +35,28 @@ export function NavAccounts() {
                   // its tools. Andre: "each gotrade will have set of tools we are
                   // building" — so the tools hang off the account, not off a
                   // global menu that would grow with every account added.
-                  ...d.accounts.map((a) => ({
-                    label: a.name,
-                    items: [
-                      { label: 'Dashboard', href: `/accounts/${a.id}` },
-                      {
-                        label: 'Report',
-                        href: `/accounts/${a.id}/report`,
-                        // The Transactions tab is a sibling ROUTE under the same
-                        // nav entry; without this the entry loses its highlight
-                        // when you switch tabs.
-                        matchHrefs: [
-                          `/accounts/${a.id}/report/stocks`,
-                          `/accounts/${a.id}/report/transactions`,
-                        ],
-                      },
-                    ],
-                  })),
+                  ...d.accounts.map((a) =>
+                    // Gold has no statements, so no Report tabs to hang off it —
+                    // one entry rather than a submenu with a single child.
+                    a.kind === 'COMMODITY'
+                      ? { label: a.name, href: `/accounts/${a.id}/gold` }
+                      : {
+                          label: a.name,
+                          items: [
+                            { label: 'Dashboard', href: `/accounts/${a.id}` },
+                            {
+                              label: 'Report',
+                              href: `/accounts/${a.id}/report`,
+                              // Sibling ROUTES under the same nav entry; without
+                              // this the entry loses its highlight on a tab switch.
+                              matchHrefs: [
+                                `/accounts/${a.id}/report/stocks`,
+                                `/accounts/${a.id}/report/transactions`,
+                              ],
+                            },
+                          ],
+                        },
+                  ),
                 ],
               }
             : g,

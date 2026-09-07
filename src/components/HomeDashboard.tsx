@@ -14,18 +14,26 @@ const RED = '#a8071a';
 const YEARS_SHOWN = 3;
 
 export interface AccountSlice {
-  id: string; name: string; value: number; currency: string;
+  id: string; name: string;
+  /** Value in RUPIAH — the common unit, so slices and rows compare. */
+  value: number;
+  /** Value in the account's own currency, for the row that shows it. */
+  valueNative: number;
+  currency: string;
   annualised: number | null; asOf: string;
 }
 
 export function HomeDashboard({
-  totalUsd, totalIdr, fxRate, fxFetchedAt, fxStale,
-  contributions, gain, simpleReturn, annualised, irr,
+  totalUsd, totalIdr, goldIdr, goldInvestedIdr, goldGainIdr,
+  fxRate, fxFetchedAt, fxStale,
+  contributions, contributionsIdr, gain, gainIdr, simpleReturn, annualised, irr,
   years, accounts, projections, asOfLabel, coverage,
 }: {
   totalUsd: number; totalIdr: number | null;
+  goldIdr: number; goldInvestedIdr: number; goldGainIdr: number;
   fxRate: number | null; fxFetchedAt: string | null; fxStale: boolean;
-  contributions: number; gain: number;
+  contributions: number; contributionsIdr: number | null;
+  gain: number; gainIdr: number | null;
   simpleReturn: number | null; annualised: number | null; irr: number | null;
   years: CombinedYear[];
   accounts: AccountSlice[];
@@ -48,7 +56,7 @@ export function HomeDashboard({
   // One order everywhere: largest account first, in the pie and in the list under it.
   const ordered = [...accounts].sort((a, b) => b.value - a.value);
   const slices: Slice[] = ordered.filter((a) => a.value > 0).map((a) => ({
-    label: a.name, value: a.value, note: usd(a.value),
+    label: a.name, value: a.value, note: idrShort(a.value),
   }));
 
   const orderedYears = [...years].reverse();
@@ -62,8 +70,17 @@ export function HomeDashboard({
         <Statistic title="Total net worth" value={totalIdr === null ? '—' : idr(totalIdr)}
           valueStyle={{ fontSize: small ? 26 : 34 }} />
         <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-          {usd(totalUsd)}
-          {fxRate !== null && <> · at Rp {Math.round(fxRate).toLocaleString('id-ID')} to the dollar</>}
+          {goldIdr > 0 ? (
+            <>
+              {usd(totalUsd)} in investments{fxRate !== null && <> (Rp {Math.round(fxRate).toLocaleString('id-ID')}/USD)</>}
+              {' + '}{idr(goldIdr)} in gold
+            </>
+          ) : (
+            <>
+              {usd(totalUsd)}
+              {fxRate !== null && <> · at Rp {Math.round(fxRate).toLocaleString('id-ID')} to the dollar</>}
+            </>
+          )}
         </Typography.Text>
         {fxStale && fxFetchedAt && (
           <div style={{ marginTop: 6 }}>
@@ -76,7 +93,9 @@ export function HomeDashboard({
 
       <Row gutter={[12, 12]}>
         <Col xs={12} lg={6}>
-          <StatCard small={small} title="Total money invested" value={usd(contributions)}
+          <StatCard small={small}
+            title="Total money invested"
+            value={goldIdr > 0 && contributionsIdr !== null ? idr(contributionsIdr) : usd(contributions)}
             drawerTitle="Money you put in"
             breakdown={
               <BreakdownStack>
@@ -85,13 +104,21 @@ export function HomeDashboard({
                 {orderedYears.map((y) => (
                   <BreakdownLine key={y.year} label={y.year} value={<Money v={y.contributions} zeroDim />} />
                 ))}
-                <BreakdownLine label="Total" value={<Money v={contributions} />} strong divider />
+                <BreakdownLine label="Total, investments" value={<Money v={contributions} />} strong divider />
+                {goldIdr > 0 && (
+                  <BreakdownNote>
+                    Plus {idr(goldInvestedIdr)} paid for gold. Gold is held in rupiah and the
+                    investments in dollars, so the two are only added at the top, after conversion.
+                  </BreakdownNote>
+                )}
               </BreakdownStack>
             } />
         </Col>
         <Col xs={12} lg={6}>
-          <StatCard small={small} title="Investment earned" value={usd0(gain)}
-            valueColor={gain >= 0 ? GREEN : RED}
+          <StatCard small={small}
+            title="Investment earned"
+            value={goldIdr > 0 && gainIdr !== null ? idr(gainIdr) : usd0(gain)}
+            valueColor={(goldIdr > 0 && gainIdr !== null ? gainIdr : gain) >= 0 ? GREEN : RED}
             drawerTitle="Earned, year by year"
             breakdown={
               <BreakdownStack>
@@ -134,7 +161,9 @@ export function HomeDashboard({
       </Row>
 
       <Card title="What it is made of" size={small ? 'small' : 'default'}>
-        <PieChart slices={slices} centreValue={usd0(totalUsd)} centreLabel="total" />
+        <PieChart slices={slices}
+          centreValue={totalIdr === null ? '—' : idrShort(totalIdr)}
+          centreLabel="net worth" />
       </Card>
 
       <Card title="Accounts" styles={{ body: { padding: 0 } }} size={small ? 'small' : 'default'}>
@@ -145,8 +174,23 @@ export function HomeDashboard({
               key: 'name', label: 'Account', primary: true,
               render: (r) => <Link href={`/accounts/${r.id}`}>{r.name} →</Link>,
             },
-            { key: 'val', label: 'Value', render: (r) => <Money v={r.value} /> },
-            { key: 'share', label: 'Share', render: (r) => `${((r.value / (totalUsd || 1)) * 100).toFixed(1)}%` },
+            {
+              key: 'val', label: 'Value',
+              render: (r) => (
+                <span>
+                  {idr(r.value)}
+                  {r.currency !== 'IDR' && (
+                    <span style={{ display: 'block', fontSize: 11, color: '#726c63' }}>
+                      {usd(r.valueNative)}
+                    </span>
+                  )}
+                </span>
+              ),
+            },
+            {
+              key: 'share', label: 'Share',
+              render: (r) => `${((r.value / (accounts.reduce((a, x) => a + x.value, 0) || 1)) * 100).toFixed(1)}%`,
+            },
             { key: 'ret', label: 'Return a year', render: (r) => <Pct v={r.annualised} /> },
             { key: 'asof', label: 'Latest statement', render: (r) => r.asOf },
           ]}

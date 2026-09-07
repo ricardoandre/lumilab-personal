@@ -17,7 +17,9 @@ export async function GET() {
   const accounts = await prisma.account.findMany({
     where: { isActive: true },
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-    select: { id: true, name: true },
+    select: { id: true, name: true, kind: true },
   });
-  return NextResponse.json({ accounts: accounts.map((a) => ({ id: String(a.id), name: a.name })) });
+  return NextResponse.json({
+    accounts: accounts.map((a) => ({ id: String(a.id), name: a.name, kind: a.kind })),
+  });
 }

@@ -122,13 +122,14 @@ for (const [name, path, expect] of [
   ['accounts', '/accounts', 'Andre Gotrade'],
   ['account dashboard', '/accounts/1', 'so far'],
   ['my account', '/account', 'Change password'],
-  ['users', '/users', 'ricardo.4ndre@gmail.com'],
   ['field options', '/field-options', 'Gotrade'],
   ['overview report', '/accounts/1/report', 'Year by year'],
   ['stocks report', '/accounts/1/report/stocks', 'Return a year'],
   ['transactions', '/accounts/1/report/transactions', 'DEPOSIT'.toLowerCase()],
   ['upload button', '/accounts/1', 'Upload'],
   ['projection', '/accounts/projection', 'In 5 years'],
+  ['gold', '/accounts/3/gold', 'Gold held'],
+  ['users', '/users', 'New user'],
 ]) {
   await goto(BASE + path);
   const text = await evaluate(`document.body.innerText`);
