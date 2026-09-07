@@ -6,7 +6,7 @@ import type { MonthRow, YearVsBench, Overview, StockRow, YearIrr } from '@/lib/g
 import { ResponsiveRows } from './ResponsiveRows';
 import { PortfolioChart } from './PortfolioChart';
 import { ConcentrationCard } from './ConcentrationCard';
-import { usd0, Pct, Money } from './money';
+import { usd0, Pct, Money, useCurrency, formatMoney } from './money';
 import { StockLabel } from './StockIcon';
 import { AccountStats } from './AccountStats';
 
@@ -26,6 +26,12 @@ export function AccountOverview({
   overview: Overview | null; years: YearVsBench[]; months: MonthRow[]; stocks: StockRow[];
   irr: number | null; irrYears: YearIrr[];
 }) {
+  // Format in the SCREEN's currency, not always dollars — an IPOT account is
+  // in rupiah and read "$840,970,000".
+  const currency = useCurrency();
+  const money = (n: number) => formatMoney(n, currency);
+  const money0 = (n: number) => formatMoney(n, currency, { compact: true });
+
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.lg;
   const size = isMobile ? ('small' as const) : ('default' as const);
@@ -57,7 +63,7 @@ export function AccountOverview({
           <div><Money v={overview.cash} /> uninvested — {(overview.cashPct * 100).toFixed(1)}% of the account.</div>
           {overview.cashDragUsd !== null && (
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Had it tracked SPY it would have earned about <strong>{usd0(overview.cashDragUsd)}</strong> more.
+              Had it tracked SPY it would have earned about <strong>{money0(overview.cashDragUsd)}</strong> more.
               That is the price of the buffer, not an argument against it — the same cash is why{' '}
               {years.find((y) => (y.vsBenchmark ?? 0) > 0)?.year ?? 'a down year'} hurt less.
             </Typography.Text>
@@ -74,9 +80,9 @@ export function AccountOverview({
           rows={stocks.map((s) => ({ ...s, key: s.symbol }))}
           fields={[
             { key: 'sym', label: 'Stock', primary: true, render: (r) => <StockLabel symbol={r.symbol} name={r.name} /> },
-            { key: 'val', label: 'Portfolio value', render: (r) => <Money v={r.marketValue} /> },
+            { key: 'val', label: 'Portfolio value', render: (r) => <Money v={r.marketValue} compact /> },
             { key: 'weight', label: 'Share of account', render: (r) => `${(r.weightPct * 100).toFixed(1)}%` },
-            { key: 'eq', label: 'Money in', render: (r) => <Money v={r.costBasis} /> },
+            { key: 'eq', label: 'Money in', render: (r) => <Money v={r.costBasis} compact /> },
             { key: 'ret', label: 'Return', render: (r) => <Pct v={r.returnPct} bold /> },
             { key: 'ann', label: 'Return a year', render: (r) => <Pct v={r.annualisedPct} /> },
           ]}
@@ -91,10 +97,10 @@ export function AccountOverview({
             { key: 'ret', label: 'Your return', render: (r) => <Pct v={r.returnPct} bold /> },
             { key: 'spy', label: 'SPY', render: (r) => <Pct v={r.benchmarkPct} /> },
             { key: 'diff', label: 'Difference', render: (r) => <Pct v={r.vsBenchmark} /> },
-            { key: 'end', label: 'Value at year end', render: (r) => <Money v={r.endValue} /> },
-            { key: 'paid', label: 'Paid in', render: (r) => <Money v={r.contributions} zeroDim /> },
-            { key: 'inc', label: 'Dividends', render: (r) => <Money v={r.income} zeroDim /> },
-            { key: 'gain', label: 'Gain', hideOnMobile: true, render: (r) => <Money v={r.gain} /> },
+            { key: 'end', label: 'Value at year end', render: (r) => <Money v={r.endValue} compact /> },
+            { key: 'paid', label: 'Paid in', render: (r) => <Money v={r.contributions} zeroDim compact /> },
+            { key: 'inc', label: 'Dividends', render: (r) => <Money v={r.income} zeroDim compact /> },
+            { key: 'gain', label: 'Gain', hideOnMobile: true, render: (r) => <Money v={r.gain} compact /> },
           ]}
         />
         {orderedYears.length > YEARS_SHOWN && !showAllYears && (

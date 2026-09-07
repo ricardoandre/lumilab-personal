@@ -2,7 +2,7 @@
 
 import { Card, Typography, Grid } from 'antd';
 import type { MonthRow } from '@/lib/gotrade/report';
-import { usd0 } from './money';
+import { useCurrency, formatMoney } from './money';
 
 /**
  * Portfolio value over time, split into money paid in versus money earned.
@@ -11,6 +11,10 @@ import { usd0 } from './money';
  * ~200KB of JavaScript on a phone, which is where this is mostly read.
  */
 export function PortfolioChart({ months, bare }: { months: MonthRow[]; bare?: boolean }) {
+  // Follows the screen's currency: this chart sits inside an account page and
+  // was labelling rupiah totals with a dollar sign.
+  const currency = useCurrency();
+  const usd0 = (n: number) => formatMoney(n, currency, { compact: true });
   const screens = Grid.useBreakpoint();
   const h = screens.lg ? 220 : 160;
   const w = 720; // viewBox units; the SVG scales to its container

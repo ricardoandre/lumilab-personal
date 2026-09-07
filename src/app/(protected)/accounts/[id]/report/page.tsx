@@ -30,7 +30,7 @@ export default async function OverviewReportPage({ params }: { params: Promise<{
     : null;
 
   return (
-    <ReportShell accountId={id} accountName={account.name} {...health}>
+    <ReportShell accountId={id} accountName={account.name} currency={account.currency} {...health}>
       <AccountOverview
         overview={overview}
         years={yearlyVsBenchmark(months, bench)}

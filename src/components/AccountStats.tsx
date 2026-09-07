@@ -3,7 +3,7 @@
 import { Row, Col, Card, Statistic, Typography, Grid } from 'antd';
 import type { Overview, StockRow, YearVsBench, YearIrr } from '@/lib/gotrade/report';
 import { StatCard, BreakdownLine, BreakdownNote, BreakdownStack } from './StatCard';
-import { usd, usd0, Pct, Money } from './money';
+import { usd, usd0, Pct, Money, useCurrency, formatMoney } from './money';
 import { StockLabel } from './StockIcon';
 
 const GREEN = '#237804';
@@ -33,6 +33,12 @@ export function AccountStats({
   years?: YearVsBench[]; irr?: number | null; irrYears?: YearIrr[];
   clickable?: boolean;
 }) {
+  // Format in the SCREEN's currency, not always dollars — an IPOT account is
+  // in rupiah and read "$840,970,000".
+  const currency = useCurrency();
+  const money = (n: number) => formatMoney(n, currency);
+  const money0 = (n: number) => formatMoney(n, currency, { compact: true });
+
   // Breakdown lists are ordered by RETURN, best first — the ranking is the point
   // of opening them, and alphabetical order says nothing.
   const byReturn = [...stocks].sort((a, b) => (b.returnPct ?? -Infinity) - (a.returnPct ?? -Infinity));
@@ -50,7 +56,7 @@ export function AccountStats({
       <Row gutter={[12, 12]}>
         <Col xs={12} lg={6}>
           {clickable ? (
-            <StatCard small={small} title="Total money invested" value={usd(overview.contributions)}
+            <StatCard small={small} title="Total money invested" value={money(overview.contributions)}
               drawerTitle="Money you put in"
               breakdown={
                 <BreakdownStack>
@@ -67,11 +73,11 @@ export function AccountStats({
                   <BreakdownLine label="Difference" value={<Money v={overview.gain} />} strong />
                 </BreakdownStack>
               } />
-          ) : plain('Total money invested', usd(overview.contributions))}
+          ) : plain('Total money invested', money(overview.contributions))}
         </Col>
         <Col xs={12} lg={6}>
           {clickable ? (
-            <StatCard small={small} title="Portfolio value" value={usd(overview.latestValue)}
+            <StatCard small={small} title="Portfolio value" value={money(overview.latestValue)}
               drawerTitle="What makes up the value"
               breakdown={
                 <BreakdownStack>
@@ -92,13 +98,13 @@ export function AccountStats({
                   )}
                 </BreakdownStack>
               } />
-          ) : plain('Portfolio value', usd(overview.latestValue))}
+          ) : plain('Portfolio value', money(overview.latestValue))}
         </Col>
 
-        <Col xs={12} lg={6}>{plain('Current cash', usd(overview.cash))}</Col>
+        <Col xs={12} lg={6}>{plain('Current cash', money(overview.cash))}</Col>
         <Col xs={12} lg={6}>
           {clickable ? (
-            <StatCard small={small} title="Investment earned" value={usd0(overview.gain)}
+            <StatCard small={small} title="Investment earned" value={money0(overview.gain)}
               valueColor={overview.gain >= 0 ? GREEN : RED}
               drawerTitle="Where the money came from"
               breakdown={
@@ -111,12 +117,12 @@ export function AccountStats({
                   {byMoney.map((s) => (
                     <BreakdownLine key={s.symbol}
                       label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
-                      note={s.dividends ? `${usd(s.unrealized)} price + ${usd(s.dividends)} dividends` : 'price growth'}
+                      note={s.dividends ? `${money(s.unrealized)} price + ${money(s.dividends)} dividends` : 'price growth'}
                       value={<Money v={s.totalReturn} />} />
                   ))}
                 </BreakdownStack>
               } />
-          ) : plain('Investment earned', usd0(overview.gain), overview.gain >= 0 ? GREEN : RED)}
+          ) : plain('Investment earned', money0(overview.gain), overview.gain >= 0 ? GREEN : RED)}
         </Col>
 
         <Col xs={12} lg={6}>
@@ -210,7 +216,7 @@ Then:        multiply every month together, and annualise`}</Formula>
                       <div style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>Year by year</div>
                       {[...irrYears].reverse().map((y) => (
                         <BreakdownLine key={y.year} label={y.year}
-                          note={y.contributions !== 0 ? `${usd(y.contributions)} paid in` : 'nothing paid in'}
+                          note={y.contributions !== 0 ? `${money(y.contributions)} paid in` : 'nothing paid in'}
                           value={<Pct v={y.irr} />} />
                       ))}
                     </>

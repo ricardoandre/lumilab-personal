@@ -10,7 +10,7 @@ import { DataHealthAlert } from './DataHealthAlert';
 import { YearMetrics } from './YearMetrics';
 import { ConcentrationCard } from './ConcentrationCard';
 import { StockLabel } from './StockIcon';
-import { usd0, Pct, Money } from './money';
+import { Pct, Money, CurrencyProvider, formatMoney } from './money';
 
 const GREEN = '#237804';
 const RED = '#a8071a';
@@ -27,12 +27,17 @@ export function AccountDashboard({
   asAt: { period: string; monthsBehind: number } | null;
   missing: string[]; failed: { fileName: string; reason: string }[];
 }) {
+  // The account's own currency, already a prop here.
+  const money = (n: number) => formatMoney(n, currency);
+  const money0 = (n: number) => formatMoney(n, currency, { compact: true });
+
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.lg;
   const size = isMobile ? ('small' as const) : ('default' as const);
   const pct = (v: number | null) => (v === null ? '—' : `${v >= 0 ? '+' : ''}${(v * 100).toFixed(2)}%`);
 
   return (
+    <CurrencyProvider value={currency}>
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div style={{ minWidth: 0 }}>
@@ -69,7 +74,7 @@ export function AccountDashboard({
               <div><Money v={overview.cash} /> uninvested — {(overview.cashPct * 100).toFixed(1)}% of the account.</div>
               {overview.cashDragUsd !== null && (
                 <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                  Had it tracked SPY it would have earned about <strong>{usd0(overview.cashDragUsd)}</strong> more.
+                  Had it tracked SPY it would have earned about <strong>{money0(overview.cashDragUsd)}</strong> more.
                 </Typography.Text>
               )}
             </Space>
@@ -90,10 +95,10 @@ export function AccountDashboard({
                 fields={[
                   { key: 'sym', label: 'Stock', primary: true, render: (r) => <StockLabel symbol={r.symbol} name={r.name} /> },
                   { key: 'yret', label: `${thisYear.year} return`, render: (r) => <Pct v={r.yearReturnPct} bold /> },
-                  { key: 'ygain', label: `${thisYear.year} earned`, render: (r) => <Money v={r.yearGain} /> },
-                  { key: 'start', label: `End ${Number(thisYear.year) - 1}`, render: (r) => <Money v={r.startValue} zeroDim /> },
-                  { key: 'bought', label: 'Bought this year', render: (r) => <Money v={r.netTraded} zeroDim /> },
-                  { key: 'val', label: 'Value now', render: (r) => <Money v={r.marketValue} /> },
+                  { key: 'ygain', label: `${thisYear.year} earned`, render: (r) => <Money v={r.yearGain} compact /> },
+                  { key: 'start', label: `End ${Number(thisYear.year) - 1}`, render: (r) => <Money v={r.startValue} zeroDim compact /> },
+                  { key: 'bought', label: 'Bought this year', render: (r) => <Money v={r.netTraded} zeroDim compact /> },
+                  { key: 'val', label: 'Value now', render: (r) => <Money v={r.marketValue} compact /> },
                   {
                     key: 'weight', label: 'Share of account',
                     render: (r) => `${(r.weightPct * 100).toFixed(1)}%`,
@@ -106,5 +111,6 @@ export function AccountDashboard({
         </>
       )}
     </Space>
+    </CurrencyProvider>
   );
 }

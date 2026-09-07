@@ -18,7 +18,7 @@ export default async function StocksPage({ params }: { params: Promise<{ id: str
 
   const [stocks, health] = await Promise.all([stockReport(prisma, accountId), reportHealth(accountId)]);
   return (
-    <ReportShell accountId={id} accountName={account.name} {...health}>
+    <ReportShell accountId={id} accountName={account.name} currency={account.currency} {...health}>
       <StocksReport stocks={stocks} />
     </ReportShell>
   );

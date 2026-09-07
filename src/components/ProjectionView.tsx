@@ -2,7 +2,7 @@
 
 import { Card, Typography, Space, Grid, Alert } from 'antd';
 import { ResponsiveRows } from './ResponsiveRows';
-import { usd0, Pct, Money } from './money';
+import { idrShort, Pct, Money } from './money';
 
 export interface ProjectionRow {
   key: string;
@@ -32,17 +32,17 @@ export function ProjectionView({ rows }: { rows: ProjectionRow[] }) {
       <Card size={screens.lg ? 'default' : 'small'}>
         <Space direction="vertical" size={2} style={{ width: '100%' }}>
           <Typography.Text strong>All accounts together</Typography.Text>
-          <div style={{ fontSize: 13, marginBottom: 6 }}>Worth <strong>{usd0(totalNow)}</strong> today</div>
+          <div style={{ fontSize: 13, marginBottom: 6 }}>Worth <strong>{idrShort(totalNow)}</strong> today</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: '4px 14px', fontSize: 13, alignItems: 'baseline' }}>
             <span />
             <span style={{ fontSize: 12, color: '#726c63' }}>If you stop adding</span>
             <span style={{ fontSize: 12, color: '#726c63' }}>If you keep adding</span>
             <span style={{ fontSize: 12, color: '#726c63' }}>In 5 years</span>
-            <strong>{usd0(total5)}</strong>
-            <strong>{usd0(total5Add)}</strong>
+            <strong>{idrShort(total5)}</strong>
+            <strong>{idrShort(total5Add)}</strong>
             <span style={{ fontSize: 12, color: '#726c63' }}>In 10 years</span>
-            <strong>{usd0(total10)}</strong>
-            <strong>{usd0(total10Add)}</strong>
+            <strong>{idrShort(total10)}</strong>
+            <strong>{idrShort(total10Add)}</strong>
           </div>
         </Space>
       </Card>

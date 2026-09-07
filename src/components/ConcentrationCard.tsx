@@ -3,7 +3,7 @@
 import { Card, Typography, Space, Grid } from 'antd';
 import type { Overview, StockRow } from '@/lib/gotrade/report';
 import { PieChart, type Slice } from './PieChart';
-import { usd } from './money';
+import { usd, useCurrency, formatMoney } from './money';
 
 /**
  * Every holding's share of the account, largest first, with cash included.
@@ -17,13 +17,19 @@ import { usd } from './money';
  * one decimal place.
  */
 export function ConcentrationCard({ overview, stocks }: { overview: Overview; stocks: StockRow[] }) {
+  // Format in the SCREEN's currency, not always dollars — an IPOT account is
+  // in rupiah and read "$840,970,000".
+  const currency = useCurrency();
+  const money = (n: number) => formatMoney(n, currency);
+  const money0 = (n: number) => formatMoney(n, currency, { compact: true });
+
   const screens = Grid.useBreakpoint();
   const rows = [...stocks].sort((a, b) => b.weightPct - a.weightPct);
   const top = rows[0];
 
   const slices: Slice[] = [
-    ...rows.map((s) => ({ label: s.symbol, value: s.marketValue, note: usd(s.marketValue) })),
-    { label: 'Cash', value: Math.max(overview.cash, 0), color: '#b9b3a8', note: usd(overview.cash) },
+    ...rows.map((s) => ({ label: s.symbol, value: s.marketValue, note: money(s.marketValue) })),
+    { label: 'Cash', value: Math.max(overview.cash, 0), color: '#b9b3a8', note: money(overview.cash) },
   ].filter((s) => s.value > 0);
 
   return (

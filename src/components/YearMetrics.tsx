@@ -4,7 +4,7 @@ import { Row, Col, Card, Statistic, Grid } from 'antd';
 import type { YearVsBench, StockYearRow } from '@/lib/gotrade/report';
 import { StatCard, BreakdownLine, BreakdownNote, BreakdownStack } from './StatCard';
 import { StockLabel } from './StockIcon';
-import { usd, usd0, Pct, Money } from './money';
+import { usd, usd0, Pct, Money, useCurrency, formatMoney } from './money';
 
 const GREEN = '#237804';
 const RED = '#a8071a';
@@ -20,6 +20,12 @@ const RED = '#a8071a';
 export function YearMetrics({
   year, cash, stocks,
 }: { year: YearVsBench; cash: number; stocks: StockYearRow[] }) {
+  // Format in the SCREEN's currency, not always dollars — an IPOT account is
+  // in rupiah and read "$840,970,000".
+  const currency = useCurrency();
+  const money = (n: number) => formatMoney(n, currency);
+  const money0 = (n: number) => formatMoney(n, currency, { compact: true });
+
   const screens = Grid.useBreakpoint();
   const small = !screens.lg;
   const prev = Number(year.year) - 1;
@@ -36,11 +42,11 @@ export function YearMetrics({
 
   return (
     <Row gutter={[12, 12]}>
-      <Col xs={12} lg={8}>{plain(`End ${prev} value`, usd(year.startValue))}</Col>
-      <Col xs={12} lg={8}>{plain('New invested fund', usd(year.contributions))}</Col>
+      <Col xs={12} lg={8}>{plain(`End ${prev} value`, money(year.startValue))}</Col>
+      <Col xs={12} lg={8}>{plain('New invested fund', money(year.contributions))}</Col>
 
       <Col xs={12} lg={8}>
-        <StatCard small={small} title="Current portfolio value" value={usd(year.endValue)}
+        <StatCard small={small} title="Current portfolio value" value={money(year.endValue)}
           drawerTitle={`What ${year.year} is made of`}
           breakdown={
             <BreakdownStack>
@@ -54,10 +60,10 @@ export function YearMetrics({
           } />
       </Col>
 
-      <Col xs={12} lg={8}>{plain('Remaining cash', usd(cash))}</Col>
+      <Col xs={12} lg={8}>{plain('Remaining cash', money(cash))}</Col>
 
       <Col xs={12} lg={8}>
-        <StatCard small={small} title="Total return amount" value={usd0(year.gain)}
+        <StatCard small={small} title="Total return amount" value={money0(year.gain)}
           valueColor={year.gain >= 0 ? GREEN : RED}
           drawerTitle={`What ${year.year} earned`}
           breakdown={
@@ -91,7 +97,7 @@ export function YearMetrics({
               </div>
               {byYearReturn.map((s) => (
                 <BreakdownLine key={s.symbol} label={<StockLabel symbol={s.symbol} name={s.name} size={22} />}
-                  note={s.netTraded > 0 ? `${usd(s.netTraded)} bought this year` : undefined}
+                  note={s.netTraded > 0 ? `${money(s.netTraded)} bought this year` : undefined}
                   value={<Pct v={s.yearReturnPct} />} />
               ))}
               <BreakdownNote>

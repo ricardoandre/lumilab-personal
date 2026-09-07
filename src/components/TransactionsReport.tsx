@@ -44,7 +44,7 @@ export function TransactionsReport({ rows }: { rows: TxRow[] }) {
                 ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><StockIcon symbol={r.symbol} size={18} />{r.symbol}</span>
                 : '—'),
             },
-            { key: 'amt', label: 'Amount', render: (r) => <Money v={r.amount} /> },
+            { key: 'amt', label: 'Amount', render: (r) => <Money v={r.amount} compact /> },
             { key: 'qty', label: 'Shares', render: (r) => (r.quantity === null ? '—' : r.quantity) },
             { key: 'price', label: 'Price', render: (r) => (r.price === null ? '—' : <Money v={r.price} />) },
           ]}
