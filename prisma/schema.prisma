@@ -303,3 +303,35 @@ model StatementHolding {
   @@index([securityId, asOf])
   @@map("statement_holding")
 }
+
+// ─────────────────────────────── personal ────────────────────────────────
+// APPLIED 2026-10-16, approved by Andre. Preply vocabulary: one row per lesson
+// (a day the tutor wrote words in the chat), its words beneath it. Re-importing
+// the same chat must never duplicate, hence the two unique keys.
+
+model PreplyLesson {
+  id         BigInt   @id @default(autoincrement())
+  tutorName  String   @map("tutor_name") @db.VarChar(100)
+  lessonDate DateTime @map("lesson_date") @db.Date
+  title      String?  @db.VarChar(200)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  words PreplyWord[]
+
+  @@unique([tutorName, lessonDate])
+  @@map("preply_lesson")
+}
+
+model PreplyWord {
+  id       BigInt  @id @default(autoincrement())
+  lessonId BigInt  @map("lesson_id")
+  hanzi    String  @db.VarChar(255)
+  pinyin   String  @db.VarChar(500)
+  meaning  String? @db.VarChar(500)
+  position Int
+
+  lesson PreplyLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, hanzi])
+  @@map("preply_word")
+}

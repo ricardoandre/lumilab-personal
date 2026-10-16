@@ -21,6 +21,8 @@ export const authConfig: NextAuthConfig = {
       const isLoggedIn = !!auth?.user;
       if (nextUrl.pathname.startsWith('/login')) return true;
       if (nextUrl.pathname.startsWith('/api/auth')) return true;
+      // The Preply Chrome extension: no session, checks its own token.
+      if (nextUrl.pathname === '/api/preply/sync') return true;
       return isLoggedIn;
     },
   },

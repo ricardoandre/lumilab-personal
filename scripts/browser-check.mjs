@@ -134,6 +134,7 @@ for (const [name, path, expect] of [
   ['gold transactions', '/accounts/3/gold/transactions', 'Gold purchases'],
   ['gold report', '/accounts/3/gold/report', 'By owner'],
   ['users', '/users', 'New user'],
+  ['preply', '/preply', 'Hide meanings'],
 ]) {
   await goto(BASE + path);
   const text = await evaluate(`document.body.innerText`);

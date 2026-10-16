@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Lumilab Preply Sync",
+  "version": "1.0.0",
+  "description": "Sends the words your Preply tutor writes in the chat to personal.lumilabcreative.com.",
+  "permissions": ["storage", "alarms", "tabs"],
+  "host_permissions": ["https://preply.com/*", "https://personal.lumilabcreative.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{ "matches": ["https://preply.com/*"], "js": ["content.js"], "run_at": "document_idle" }],
+  "action": { "default_title": "Preply → Lumilab", "default_popup": "popup.html" }
+}

@@ -24,6 +24,10 @@ export const NAV_GROUPS: NavGroup[] = [
       },
     ],
   },
+  {
+    label: 'Personal',
+    entries: [{ label: 'Preply', href: '/preply' }],
+  },
 ];
 
 /**
