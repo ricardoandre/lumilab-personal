@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Card, Form, Input, Button, Typography, Alert } from 'antd';
 
 export default function LoginPage() {
@@ -31,7 +32,8 @@ export default function LoginPage() {
           <Form.Item name="email" label="Email" rules={[{ required: true }]}>
             <Input type="email" autoComplete="username" size="large" />
           </Form.Item>
-          <Form.Item name="password" label="Password" rules={[{ required: true }]}>
+          <Form.Item name="password" label="Password" rules={[{ required: true }]}
+                     extra={<Link href="/login/forgot">Forgot password?</Link>}>
             <Input.Password autoComplete="current-password" size="large" />
           </Form.Item>
           <Button type="primary" htmlType="submit" block size="large" loading={loading}>
